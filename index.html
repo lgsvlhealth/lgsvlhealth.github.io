@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+        <title>LGSVL Health</title>
+
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+                font-family: "San Francisco", "Helvetica Neue", "Helvetica", "Arial";
+            }
+
+            body {
+                background-color: white;
+            }
+
+            .root {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .header {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .title {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-size: 3em;
+            }
+
+            .app {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .button {
+              background-color: #4CAF50;
+              border: none;
+              color: white;
+              padding: 15px 32px;
+              text-align: center;
+              text-decoration: none;
+              display: inline-block;
+              font-size: 16px;
+              margin: 4px 2px;
+              cursor: pointer;
+            }
+        </style>
+
+        <script src = "./libs/socket.io.js"></script>
+        <script src='https://meet.jit.si/external_api.js'></script>
+        <script>
+            var socket = io('https://kodegood.com:3000');
+
+            function isWebOS() {
+                return navigator.userAgent.includes('WebAppManager');
+            }
+
+            function cancelDoctorCall() {
+
+            }
+
+            function doDoctorCall() {
+                 document.getElementById("app").innerHTML = ' \
+                    <button class="button" style="background-color: red;" onclick="cancelDoctorCall()">Cancel call</button> \
+                    ';
+
+                socket.emit('doctorCall', {room: "test"});
+
+                socket.on('newAnswerDoctorCall', function(data) {
+                    console.log("Doctor got answer");
+
+                    document.getElementById("root").setAttribute("style", "display:none;");
+
+                    let someID = Math.random().toString(36).substring(7);
+
+                    var domain = "meet.jit.si";
+                    var options = {
+                        roomName: "LGSVLJitsiMeetHealthPOC" + someID,
+                        width: "1920px",
+                        height: "1080px",
+                        parentNode: undefined,
+                        configOverwrite: { preferH264: true },
+                    }
+                    var api = new JitsiMeetExternalAPI(domain, options);
+                    api.addEventListener('participantLeft', function(id) {
+                        document.getElementById("app").innerHTML = ' \
+                            <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
+                            ';
+                        document.getElementById("root").setAttribute("style", "display:flex;");
+                        api.dispose();
+                    });
+
+                    socket.emit('doctorVideoCall', {roomName: "LGSVLJitsiMeetHealthPOC" + someID});
+                });
+            }
+
+            function joinAsDoctor() {
+                document.getElementById("app").innerHTML = ' \
+                    <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
+                    ';
+            }
+
+            function answerDoctorCall() {
+                document.getElementById("app").innerHTML = ' \
+                    <div>Waiting for video call to start...</div> \
+                    ';
+                socket.emit('answerDoctorCall', {});
+
+                socket.on('newDoctorVideoCall', function(data) {
+                    console.log("Client got answer");
+
+                    document.getElementById("root").setAttribute("style", "display:none;");
+
+                    var domain = "meet.jit.si";
+                    var options = {
+                        roomName: data.roomName,
+                        width: "1920px",
+                        height: "1080px",
+                        parentNode: undefined,
+                        configOverwrite: { preferH264: true },
+                    }
+                    var api = new JitsiMeetExternalAPI(domain, options);
+                    api.addEventListener('participantLeft', function(id) {
+                        document.getElementById("app").innerHTML = ' \
+                            <div>Waiting for a call...</div> \
+                            ';
+                        document.getElementById("root").setAttribute("style", "display:flex;");
+                        api.dispose();
+                    });
+                });
+            }
+
+            function joinAsClient() {
+                document.getElementById("app").innerHTML = ' \
+                    <div>Waiting for a call...</div> \
+                    ';
+                socket.on('newDoctorCall', function(data) {
+                    if (isWebOS()) {
+                        var bridge = new WebOSServiceBridge();
+                        var url = "luna://com.webos.notification/createAlert";
+                        //bridge.onservicecallback = function (msg) { var response = JSON.parse(msg); };
+                        var params = '{ \
+                                        "message":"hello world", \
+                                        "buttons":[ \
+                                            { \
+                                                "label":"launch", \
+                                                "onclick":"luna://com.webos.service.applicationmanager/launch", \
+                                                "params": \
+                                                { \
+                                                    "id":"youtube.leanback.v4" \
+                                                } \
+                                            } \
+                                        ] \
+                                    }';
+                        bridge.call(url, params);
+                    } else {
+                        document.getElementById("app").innerHTML= ' \
+                        <button class="button" style="text-align:center;" onclick="answerDoctorCall()">Answer</button> \
+                        ';
+                    }
+                });
+            }
+
+            function init() {
+                if (isWebOS()) {
+                    joinAsClient();
+                } else {
+                    document.getElementById("app").innerHTML= ' \
+                        <button class="button" style="text-align:center;" onclick="joinAsDoctor()">Join as Doctor</button><br> \
+                        <button class="button" style="text-align:center;" onclick="joinAsClient()">Join as Client</button> \
+                    ';
+                }
+            }
+        </script>
+    </head>
+    <body onload="init()">
+        <div class="root" id="root">
+            <div class="header">
+                <div class="title">
+                    <h1>LGSVL Health</h1>
+                </div>
+                <image width="200" height="200" src="./assets/Doctor_Male.png"/>
+                <image width="200" height="200" src="./assets/Doctor_Female.png"/>
+            </div>
+            <br><br>
+            <div class="app" id="app"/>
+        </div>
+    </body>
+</html>
