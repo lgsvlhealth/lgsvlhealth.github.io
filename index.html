@@ -4,6 +4,7 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
         <title>LGSVL Health</title>
 
         <style>
@@ -54,6 +55,52 @@
               margin: 4px 2px;
               cursor: pointer;
             }
+
+            .jitsi_parent {
+              z-index: 0;
+              position: fixed;
+              width: 100%;
+              height: 100%;
+            }
+
+            .ptz_button {
+              background-color: #33333333;
+              border: none;
+              margin: 2px 2px;
+              width: 60px;
+              height: 60px;
+            }
+
+            .ptz_button .material-icons {
+              font-size: 48px;
+              color: black;
+              vertical-align: center;
+              text-align: center;
+            }
+
+            .ptz_button:hover  .material-icons {
+              color: #555555;
+            }
+
+            .ptz_control {
+                text-align: right;
+                float: right;
+                vertical-align: middle;
+                align-items: center;
+                justify-content: center;
+                display: inline-flex;
+                flex-direction: column;
+                height: 100%;
+            }
+
+            .ptz_control_overlay {
+                height: 100%;
+                z-index: 99;
+                opacity: 0.8;
+                top: 0;
+                right: 0;
+                position: fixed;
+            }
         </style>
 
         <script src = "./libs/socket.io.js"></script>
@@ -80,6 +127,7 @@
                     console.log("Doctor got answer");
 
                     document.getElementById("root").setAttribute("style", "display:none;");
+                    document.getElementById("ptz_control_overlay").setAttribute("style", "display:block");
 
                     let someID = Math.random().toString(36).substring(7);
 
@@ -88,7 +136,7 @@
                         roomName: "LGSVLJitsiMeetHealthPOC" + someID,
                         width: "1920px",
                         height: "1080px",
-                        parentNode: undefined,
+                        parentNode: document.querySelector("#jitsi_parent"),
                         configOverwrite: { preferH264: true },
                     }
                     var api = new JitsiMeetExternalAPI(domain, options);
@@ -97,6 +145,7 @@
                             <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
                             ';
                         document.getElementById("root").setAttribute("style", "display:flex;");
+                        document.getElementById("ptz_control_overlay").setAttribute("style", "display:none");
                         api.dispose();
                     });
 
@@ -126,7 +175,7 @@
                         roomName: data.roomName,
                         width: "1920px",
                         height: "1080px",
-                        parentNode: undefined,
+                        parentNode: document.querySelector("#jitsi_parent"),
                         configOverwrite: { preferH264: true },
                     }
                     var api = new JitsiMeetExternalAPI(domain, options);
@@ -139,6 +188,8 @@
                     });
                 });
             }
+
+            var webosBridge;
 
             function joinAsClient() {
                 document.getElementById("app").innerHTML = ' \
@@ -171,6 +222,26 @@
                 });
             }
 
+            function zoomIn() {
+                console.log("Requesting zoom in");
+                socket.emit('ptzZoomIn', {});
+            }
+            function zoomOut() {
+                socket.emit('ptzZoomOut', {});
+            }
+            function moveUp() {
+                socket.emit('ptzMoveUp', {});
+            }
+            function moveRight() {
+                socket.emit('ptzMoveRight', {});
+            }
+            function moveLeft() {
+                socket.emit('ptzMoveLeft', {});
+            }
+            function moveRight() {
+                socket.emit('ptzMoveRight', {});
+            }
+
             function init() {
                 if (isWebOS()) {
                     joinAsClient();
@@ -193,7 +264,19 @@
                 <image width="200" height="200" src="./assets/Doctor_Female.png"/>
             </div>
             <br><br>
-            <div class="app" id="app"/>
+            <div class="app" id="app"></div>
+        </div>
+        <div id="jitsi_parent"></div>
+        <div class="ptz_control_overlay" id="ptz_control_overlay" style="display:none">
+            <div class="ptz_control" id="ptz_control">
+                <button class="ptz_button" id="ptz_zoom_in_button" onclick="zoomIn()"><i class="material-icons">zoom_in</i></button>
+                <button class="ptz_button" id="ptz_zoom_out_button" onclick="zoomOut()"><i class="material-icons">zoom_out</i></button>
+
+                <button class="ptz_button" id="ptz_up_button" onclick="moveUp()"><i class="material-icons">keyboard_arrow_up</i></button>
+                <button class="ptz_button" id="ptz_down_button" onclick="moveDown()"><i class="material-icons">keyboard_arrow_down</i></button>
+                <button class="ptz_button" id="ptz_left_button" onclick="moveLeft()"><i class="material-icons">keyboard_arrow_left</i></button>
+                <button class="ptz_button" id="ptz_right_button" onclick="moveRight()"><i class="material-icons">keyboard_arrow_right</i></button>
+            </div>
         </div>
     </body>
 </html>
