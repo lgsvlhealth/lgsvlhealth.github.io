@@ -198,6 +198,18 @@
                         case 'zoomOut':
                             doZoomOut();
                             break;
+                        case 'moveUp':
+                            doMoveUp();
+                            break;
+                        case 'moveDown':
+                            doMoveDown();
+                            break;
+                        case 'moveLeft':
+                            doMoveLeft();
+                            break;
+                        case 'moveRight':
+                            doMoveRight();
+                            break;
                         default:
                             console.log("Unhandled PTZ command");
                     }
@@ -207,7 +219,9 @@
             var cameraBridge;
             var cameraHandle;
             var cameraProperties = {
-                'zoomAbsolute' : 100
+                'zoomAbsolute' : 100,
+                'pan' : 0,
+                'tilt' : 0
             };
             const cameraServiceName = 'luna://com.webos.service.camera2';
             const getCameraListName = 'getCameraList';
@@ -244,6 +258,26 @@
                 if (cameraProperties.zoomAbsolute <= 100)
                     cameraProperties.zoomAbsolute = 100;
                 setCameraProperty("zoomAbsolute", cameraProperties.zoomAbsolute);
+            }
+
+            function doMoveLeft() {
+                cameraProperties.pan -= 5000;
+                setCameraProperty("pan", cameraProperties.pan);
+            }
+
+            function doMoveRight() {
+                cameraProperties.pan += 5000;
+                setCameraProperty("pan", cameraProperties.pan);
+            }
+
+            function doMoveUp() {
+                cameraProperties.tilt -= 5000;
+                setCameraProperty("tilt", cameraProperties.tilt);
+            }
+
+            function doMoveDown() {
+                cameraProperties.tilt += 5000;
+                setCameraProperty("tilt", cameraProperties.tilt);
             }
 
             function listenCameraProperties() {
