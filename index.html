@@ -189,7 +189,132 @@
                 });
             }
 
-            var webosBridge;
+            var cameraBridge;
+            var cameraHandle;
+            var cameraProperties = {
+                'zoomAbsolute' : 100
+            };
+            const cameraServiceName = 'luna://com.webos.service.camera2';
+            const getCameraListName = 'getCameraList';
+            const openName = 'open'
+            const getPropertiesName = 'getProperties';
+            const getEventNotificationName = 'getEventNotification';
+            const setPropertiesName = 'setProperties';
+
+            function setCameraProperty(key, value) {
+                const setPropertyBridge = new WebOSServiceBridge();
+                params = {
+                    handle : cameraHandle,
+                    params : {}
+                };
+                params.params[key] = value;
+                console.log("Setting " + key + " to " + value);
+                setPropertyBridge.onservicecallback = function(msg) {
+                    console.log("setcameraproperty msg is" + msg);
+                }
+                setPropertyBridge.call(cameraServiceName + "/" + setPropertiesName, JSON.stringify(params));
+            }
+
+            function doZoomIn() {
+                cameraProperties.zoomAbsolute += 20;
+                setCameraProperty("zoomAbsolute", cameraProperties.zoomAbsolute);
+            }
+
+            function doZoomOut() {
+                cameraProperties.zoomAbsolute -= 20
+                if (cameraProperties.zoomAbsolute <= 100)
+                    cameraProperties.zoomAbsolute = 100;
+                setCameraProperty("zoomAbsolute", cameraProperties.zoomAbsolute);
+            }
+
+            function listenCameraProperties() {
+                if (cameraBridge === undefined || cameraHandle === undefined)
+                    return;
+                cameraBridge.onservicecallback = function(msg) {
+                    // getEventNotification hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+                    if (lunaResponse.eventType === undefined || lunaResponse.eventType !== 'properties')
+                        return;
+                    if (lunaResponse.propertiesInfo === undefined)
+                        return;
+                    for (propertyName in lunaResponse.propertiesInfo) {
+                        cameraProperties[propertyName] = lunaResponse.propertiesInfo[propertyName];
+                        console.log("Camera property " + propertyName + " updated to " + cameraProperties[propertyName]);
+                    }
+                }
+                params = {
+                    handle : cameraHandle,
+                    subscribe : true
+                }
+                cameraBridge.call(cameraServiceName + "/" + getEventNotificationName, JSON.stringify(params));
+            }
+
+            function getCameraProperties() {
+                if (cameraBridge === undefined || cameraHandle === undefined)
+                    return;
+                cameraBridge.onservicecallback = function(msg) {
+                    // getProperties hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+
+                    if (lunaResponse.params === undefined)
+                        return;
+
+                    for (propertyName in lunaResponse.params) {
+                        cameraProperties[propertyName] = lunaResponse.params[propertyName];
+                        console.log("Camera property " + propertyName + " updated to " + cameraProperties[propertyName]);
+                    }
+                    console.log("Properties obtained from camera: " + JSON.stringify(cameraProperties));
+                    listenCameraProperties();
+                }
+                const params = {
+                    handle : cameraHandle
+                }
+                console.log(JSON.stringify(params));
+                cameraBridge.call(cameraServiceName + "/" + getPropertiesName, JSON.stringify(params));
+            }
+
+            function openCamera(cameraId) {
+                if (cameraBridge === undefined)
+                    return;
+
+                cameraBridge.onservicecallback = function(msg) {
+                    // open hook
+                    lunaResponse = JSON.parse(msg);
+                    console.log("open message is "+msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+
+                    if (lunaResponse.handle === undefined)
+                        return;
+                    cameraHandle = lunaResponse.handle;
+                    console.log("Opened camera with handle "+ cameraHandle);
+                    getCameraProperties();
+                }
+                const params = {
+                    id: cameraId,
+                    mode: "primary"
+                }
+                cameraBridge.call(cameraServiceName + '/' + openName, JSON.stringify(params));
+            }
+
+            function initCamera() {
+                cameraBridge = new WebOSServiceBridge();
+                cameraBridge.onservicecallback = function(msg) {
+                    // getCameraList hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.deviceList !== undefined && lunaResponse.deviceList[0] !== undefined &&
+                        lunaResponse.deviceList[0].id !== undefined) {
+                        console.log("Camera with id " + lunaResponse.deviceList[0].id + " found");
+                        openCamera(lunaResponse.deviceList[0].id);
+                    }
+                }
+                cameraBridge.call(cameraServiceName+'/'+getCameraListName, '{}');
+            }
+
 
             function joinAsClient() {
                 document.getElementById("app").innerHTML = ' \
