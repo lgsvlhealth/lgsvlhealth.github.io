@@ -187,6 +187,21 @@
                         api.dispose();
                     });
                 });
+                socket.on('newPtzCommand', function(data) {
+                    console.log("PTZ command received" + JSON.stringify(data));
+                    if (data.command === undefined)
+                        return;
+                    switch (data.command) {
+                        case 'zoomIn':
+                            doZoomIn();
+                            break;
+                        case 'zoomOut':
+                            doZoomOut();
+                            break;
+                        default:
+                            console.log("Unhandled PTZ command");
+                    }
+                });
             }
 
             var cameraBridge;
@@ -202,6 +217,10 @@
             const setPropertiesName = 'setProperties';
 
             function setCameraProperty(key, value) {
+                if (!isWebOS()) {
+                    console.log("Setting camera properties is not supported ("+key+":"+value+")");
+                    return;
+                }
                 const setPropertyBridge = new WebOSServiceBridge();
                 params = {
                     handle : cameraHandle,
@@ -349,22 +368,22 @@
 
             function zoomIn() {
                 console.log("Requesting zoom in");
-                socket.emit('ptzZoomIn', {});
+                socket.emit('ptzCommand', {'command': 'zoomIn'});
             }
             function zoomOut() {
-                socket.emit('ptzZoomOut', {});
+                socket.emit('ptzCommand', {'command': 'zoomOut'});
             }
             function moveUp() {
-                socket.emit('ptzMoveUp', {});
+                socket.emit('ptzCommand', {'command': 'moveUp'});
             }
-            function moveRight() {
-                socket.emit('ptzMoveRight', {});
+            function moveDown() {
+                socket.emit('ptzCommand', {'command': 'moveDown'});
             }
             function moveLeft() {
-                socket.emit('ptzMoveLeft', {});
+                socket.emit('ptzCommand', {'command': 'moveLeft'});
             }
             function moveRight() {
-                socket.emit('ptzMoveRight', {});
+                socket.emit('ptzCommand', {'command': 'moveRight'});
             }
 
             function init() {
