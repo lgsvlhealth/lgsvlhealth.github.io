@@ -229,6 +229,7 @@
             const getPropertiesName = 'getProperties';
             const getEventNotificationName = 'getEventNotification';
             const setPropertiesName = 'setProperties';
+            const closeName = 'close';
 
             function setCameraProperty(key, value) {
                 if (!isWebOS()) {
@@ -363,6 +364,8 @@
                         lunaResponse.deviceList[0].id !== undefined) {
                         console.log("Camera with id " + lunaResponse.deviceList[0].id + " found");
                         openCamera(lunaResponse.deviceList[0].id);
+                    } else {
+                        console.error("Failed to init camera: " + msg);
                     }
                 }
                 cameraBridge.call(cameraServiceName+'/'+getCameraListName, '{}');
@@ -422,6 +425,7 @@
 
             function init() {
                 if (isWebOS()) {
+                    initCamera();
                     joinAsClient();
                 } else {
                     document.getElementById("app").innerHTML= ' \
@@ -430,9 +434,18 @@
                     ';
                 }
             }
+
+            function freeResources() {
+                if (cameraBridge !== undefined && cameraHandle !== undefined) {
+                    const params = {
+                        handle: cameraHandle
+                    }
+                    cameraBridge.call(cameraServiceName + "/" + closeName, JSON.stringify(params));
+                }
+            }
         </script>
     </head>
-    <body onload="init()">
+    <body onload="init()" onunload="freeResources()">
         <div class="root" id="root">
             <div class="header">
                 <div class="title">
