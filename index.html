@@ -382,15 +382,23 @@
                         var url = "luna://com.webos.notification/createAlert";
                         //bridge.onservicecallback = function (msg) { var response = JSON.parse(msg); };
                         var params = '{ \
-                                        "message":"hello world", \
+                                        "message":"Doctor is calling", \
                                         "buttons":[ \
                                             { \
-                                                "label":"launch", \
+                                                "label":"accept", \
                                                 "onclick":"luna://com.webos.service.applicationmanager/launch", \
+                                                "buttonType": "ok", \
                                                 "params": \
                                                 { \
-                                                    "id":"youtube.leanback.v4" \
+                                                    "id":"com.lgsvl.app.health", \
+                                                    "params": { \
+                                                        "command" : "answerDoctorCall" \
+                                                    } \
                                                 } \
+                                            }, \
+                                            { \
+                                                "label":"decline", \
+                                                "buttonType": "cancel" \
                                             } \
                                         ] \
                                     }';
@@ -427,6 +435,17 @@
                 if (isWebOS()) {
                     initCamera();
                     joinAsClient();
+                    document.addEventListener('webOSRelaunch', function(ev) {
+                        if (ev.detail === undefined || ev.detail.command === undefined)
+                            return;
+                        switch (ev.detail.command) {
+                        case 'answerDoctorCall':
+                            answerDoctorCall();
+                            break;
+                        default:
+                            console.error('Unhandled relaunch event');
+                        }
+                    });
                 } else {
                     document.getElementById("app").innerHTML= ' \
                         <button class="button" style="text-align:center;" onclick="joinAsDoctor()">Join as Doctor</button><br> \
