@@ -4,12 +4,14 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
         <title>LGSVL Health</title>
 
         <style>
             html, body {
                 margin: 0;
                 padding: 0;
+                height: 100%;
                 font-family: "San Francisco", "Helvetica Neue", "Helvetica", "Arial";
             }
 
@@ -54,6 +56,51 @@
               margin: 4px 2px;
               cursor: pointer;
             }
+
+            #jitsi_parent {
+              z-index: 0;
+              width: 100%;
+              height: 100%;
+            }
+
+            .ptz_button {
+              background-color: #33333333;
+              border: none;
+              margin: 2px 2px;
+              width: 60px;
+              height: 60px;
+            }
+
+            .ptz_button .material-icons {
+              font-size: 48px;
+              color: black;
+              vertical-align: center;
+              text-align: center;
+            }
+
+            .ptz_button:hover  .material-icons {
+              color: #555555;
+            }
+
+            .ptz_control {
+                text-align: right;
+                float: right;
+                vertical-align: middle;
+                align-items: center;
+                justify-content: center;
+                display: inline-flex;
+                flex-direction: column;
+                height: 100%;
+            }
+
+            .ptz_control_overlay {
+                height: 100%;
+                z-index: 99;
+                opacity: 0.8;
+                top: 0;
+                right: 0;
+                position: fixed;
+            }
         </style>
 
         <script src = "./libs/socket.io.js"></script>
@@ -80,15 +127,14 @@
                     console.log("Doctor got answer");
 
                     document.getElementById("root").setAttribute("style", "display:none;");
+                    document.getElementById("ptz_control_overlay").setAttribute("style", "display:block");
 
                     let someID = Math.random().toString(36).substring(7);
 
                     var domain = "meet.jit.si";
                     var options = {
                         roomName: "LGSVLJitsiMeetHealthPOC" + someID,
-                        width: "1920px",
-                        height: "1080px",
-                        parentNode: undefined,
+                        parentNode: document.querySelector("#jitsi_parent"),
                         configOverwrite: { preferH264: true },
                     }
                     var api = new JitsiMeetExternalAPI(domain, options);
@@ -97,6 +143,7 @@
                             <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
                             ';
                         document.getElementById("root").setAttribute("style", "display:flex;");
+                        document.getElementById("ptz_control_overlay").setAttribute("style", "display:none");
                         api.dispose();
                     });
 
@@ -124,9 +171,7 @@
                     var domain = "meet.jit.si";
                     var options = {
                         roomName: data.roomName,
-                        width: "1920px",
-                        height: "1080px",
-                        parentNode: undefined,
+                        parentNode: document.querySelector("#jitsi_parent"),
                         configOverwrite: { preferH264: true },
                     }
                     var api = new JitsiMeetExternalAPI(domain, options);
@@ -138,7 +183,190 @@
                         api.dispose();
                     });
                 });
+                socket.on('newPtzCommand', function(data) {
+                    console.log("PTZ command received" + JSON.stringify(data));
+                    if (data.command === undefined)
+                        return;
+                    switch (data.command) {
+                        case 'zoomIn':
+                            doZoomIn();
+                            break;
+                        case 'zoomOut':
+                            doZoomOut();
+                            break;
+                        case 'moveUp':
+                            doMoveUp();
+                            break;
+                        case 'moveDown':
+                            doMoveDown();
+                            break;
+                        case 'moveLeft':
+                            doMoveLeft();
+                            break;
+                        case 'moveRight':
+                            doMoveRight();
+                            break;
+                        default:
+                            console.log("Unhandled PTZ command");
+                    }
+                });
             }
+
+            var cameraBridge;
+            var cameraHandle;
+            var cameraProperties = {
+                'zoomAbsolute' : 100,
+                'pan' : 0,
+                'tilt' : 0
+            };
+            const cameraServiceName = 'luna://com.webos.service.camera2';
+            const getCameraListName = 'getCameraList';
+            const openName = 'open'
+            const getPropertiesName = 'getProperties';
+            const getEventNotificationName = 'getEventNotification';
+            const setPropertiesName = 'setProperties';
+            const closeName = 'close';
+
+            function setCameraProperty(key, value) {
+                if (!isWebOS()) {
+                    console.log("Setting camera properties is not supported ("+key+":"+value+")");
+                    return;
+                }
+                const setPropertyBridge = new WebOSServiceBridge();
+                params = {
+                    handle : cameraHandle,
+                    params : {}
+                };
+                params.params[key] = value;
+                console.log("Setting " + key + " to " + value);
+                setPropertyBridge.onservicecallback = function(msg) {
+                    console.log("setcameraproperty msg is" + msg);
+                }
+                setPropertyBridge.call(cameraServiceName + "/" + setPropertiesName, JSON.stringify(params));
+            }
+
+            function doZoomIn() {
+                cameraProperties.zoomAbsolute += 20;
+                setCameraProperty("zoomAbsolute", cameraProperties.zoomAbsolute);
+            }
+
+            function doZoomOut() {
+                cameraProperties.zoomAbsolute -= 20
+                if (cameraProperties.zoomAbsolute <= 100)
+                    cameraProperties.zoomAbsolute = 100;
+                setCameraProperty("zoomAbsolute", cameraProperties.zoomAbsolute);
+            }
+
+            function doMoveLeft() {
+                cameraProperties.pan -= 5000;
+                setCameraProperty("pan", cameraProperties.pan);
+            }
+
+            function doMoveRight() {
+                cameraProperties.pan += 5000;
+                setCameraProperty("pan", cameraProperties.pan);
+            }
+
+            function doMoveUp() {
+                cameraProperties.tilt -= 5000;
+                setCameraProperty("tilt", cameraProperties.tilt);
+            }
+
+            function doMoveDown() {
+                cameraProperties.tilt += 5000;
+                setCameraProperty("tilt", cameraProperties.tilt);
+            }
+
+            function listenCameraProperties() {
+                if (cameraBridge === undefined || cameraHandle === undefined)
+                    return;
+                cameraBridge.onservicecallback = function(msg) {
+                    // getEventNotification hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+                    if (lunaResponse.eventType === undefined || lunaResponse.eventType !== 'properties')
+                        return;
+                    if (lunaResponse.propertiesInfo === undefined)
+                        return;
+                    for (propertyName in lunaResponse.propertiesInfo) {
+                        cameraProperties[propertyName] = lunaResponse.propertiesInfo[propertyName];
+                        console.log("Camera property " + propertyName + " updated to " + cameraProperties[propertyName]);
+                    }
+                }
+                params = {
+                    handle : cameraHandle,
+                    subscribe : true
+                }
+                cameraBridge.call(cameraServiceName + "/" + getEventNotificationName, JSON.stringify(params));
+            }
+
+            function getCameraProperties() {
+                if (cameraBridge === undefined || cameraHandle === undefined)
+                    return;
+                cameraBridge.onservicecallback = function(msg) {
+                    // getProperties hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+
+                    if (lunaResponse.params === undefined)
+                        return;
+
+                    for (propertyName in lunaResponse.params) {
+                        cameraProperties[propertyName] = lunaResponse.params[propertyName];
+                        console.log("Camera property " + propertyName + " updated to " + cameraProperties[propertyName]);
+                    }
+                    console.log("Properties obtained from camera: " + JSON.stringify(cameraProperties));
+                    listenCameraProperties();
+                }
+                const params = {
+                    handle : cameraHandle
+                }
+                console.log(JSON.stringify(params));
+                cameraBridge.call(cameraServiceName + "/" + getPropertiesName, JSON.stringify(params));
+            }
+
+            function openCamera(cameraId) {
+                if (cameraBridge === undefined)
+                    return;
+
+                cameraBridge.onservicecallback = function(msg) {
+                    // open hook
+                    lunaResponse = JSON.parse(msg);
+                    console.log("open message is "+msg);
+                    if (lunaResponse.returnValue === undefined || lunaResponse.returnValue !== true)
+                        return;
+
+                    if (lunaResponse.handle === undefined)
+                        return;
+                    cameraHandle = lunaResponse.handle;
+                    console.log("Opened camera with handle "+ cameraHandle);
+                    getCameraProperties();
+                }
+                const params = {
+                    id: cameraId,
+                    mode: "primary"
+                }
+                cameraBridge.call(cameraServiceName + '/' + openName, JSON.stringify(params));
+            }
+
+            function initCamera() {
+                cameraBridge = new WebOSServiceBridge();
+                cameraBridge.onservicecallback = function(msg) {
+                    // getCameraList hook
+                    lunaResponse = JSON.parse(msg);
+                    if (lunaResponse.deviceList !== undefined && lunaResponse.deviceList[0] !== undefined &&
+                        lunaResponse.deviceList[0].id !== undefined) {
+                        console.log("Camera with id " + lunaResponse.deviceList[0].id + " found");
+                        openCamera(lunaResponse.deviceList[0].id);
+                    } else {
+                        console.error("Failed to init camera: " + msg);
+                    }
+                }
+                cameraBridge.call(cameraServiceName+'/'+getCameraListName, '{}');
+            }
+
 
             function joinAsClient() {
                 document.getElementById("app").innerHTML = ' \
@@ -150,15 +378,23 @@
                         var url = "luna://com.webos.notification/createAlert";
                         //bridge.onservicecallback = function (msg) { var response = JSON.parse(msg); };
                         var params = '{ \
-                                        "message":"hello world", \
+                                        "message":"Doctor is calling", \
                                         "buttons":[ \
                                             { \
-                                                "label":"launch", \
+                                                "label":"accept", \
                                                 "onclick":"luna://com.webos.service.applicationmanager/launch", \
+                                                "buttonType": "ok", \
                                                 "params": \
                                                 { \
-                                                    "id":"youtube.leanback.v4" \
+                                                    "id":"com.lgsvl.app.health", \
+                                                    "params": { \
+                                                        "command" : "answerDoctorCall" \
+                                                    } \
                                                 } \
+                                            }, \
+                                            { \
+                                                "label":"decline", \
+                                                "buttonType": "cancel" \
                                             } \
                                         ] \
                                     }';
@@ -171,9 +407,41 @@
                 });
             }
 
+            function zoomIn() {
+                console.log("Requesting zoom in");
+                socket.emit('ptzCommand', {'command': 'zoomIn'});
+            }
+            function zoomOut() {
+                socket.emit('ptzCommand', {'command': 'zoomOut'});
+            }
+            function moveUp() {
+                socket.emit('ptzCommand', {'command': 'moveUp'});
+            }
+            function moveDown() {
+                socket.emit('ptzCommand', {'command': 'moveDown'});
+            }
+            function moveLeft() {
+                socket.emit('ptzCommand', {'command': 'moveLeft'});
+            }
+            function moveRight() {
+                socket.emit('ptzCommand', {'command': 'moveRight'});
+            }
+
             function init() {
                 if (isWebOS()) {
+                    initCamera();
                     joinAsClient();
+                    document.addEventListener('webOSRelaunch', function(ev) {
+                        if (ev.detail === undefined || ev.detail.command === undefined)
+                            return;
+                        switch (ev.detail.command) {
+                        case 'answerDoctorCall':
+                            answerDoctorCall();
+                            break;
+                        default:
+                            console.error('Unhandled relaunch event');
+                        }
+                    });
                 } else {
                     document.getElementById("app").innerHTML= ' \
                         <button class="button" style="text-align:center;" onclick="joinAsDoctor()">Join as Doctor</button><br> \
@@ -181,9 +449,18 @@
                     ';
                 }
             }
+
+            function freeResources() {
+                if (cameraBridge !== undefined && cameraHandle !== undefined) {
+                    const params = {
+                        handle: cameraHandle
+                    }
+                    cameraBridge.call(cameraServiceName + "/" + closeName, JSON.stringify(params));
+                }
+            }
         </script>
     </head>
-    <body onload="init()">
+    <body onload="init()" onunload="freeResources()">
         <div class="root" id="root">
             <div class="header">
                 <div class="title">
@@ -193,7 +470,19 @@
                 <image width="200" height="200" src="./assets/Doctor_Female.png"/>
             </div>
             <br><br>
-            <div class="app" id="app"/>
+            <div class="app" id="app"></div>
+        </div>
+        <div id="jitsi_parent"></div>
+        <div class="ptz_control_overlay" id="ptz_control_overlay" style="display:none">
+            <div class="ptz_control" id="ptz_control">
+                <button class="ptz_button" id="ptz_zoom_in_button" onclick="zoomIn()"><i class="material-icons">zoom_in</i></button>
+                <button class="ptz_button" id="ptz_zoom_out_button" onclick="zoomOut()"><i class="material-icons">zoom_out</i></button>
+
+                <button class="ptz_button" id="ptz_up_button" onclick="moveUp()"><i class="material-icons">keyboard_arrow_up</i></button>
+                <button class="ptz_button" id="ptz_down_button" onclick="moveDown()"><i class="material-icons">keyboard_arrow_down</i></button>
+                <button class="ptz_button" id="ptz_left_button" onclick="moveLeft()"><i class="material-icons">keyboard_arrow_left</i></button>
+                <button class="ptz_button" id="ptz_right_button" onclick="moveRight()"><i class="material-icons">keyboard_arrow_right</i></button>
+            </div>
         </div>
     </body>
 </html>
