@@ -3,6 +3,9 @@
     <head>
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
         <title>LGSVL Health</title>
@@ -105,8 +108,10 @@
 
         <script src = "./libs/socket.io.js"></script>
         <script src='https://meet.jit.si/external_api.js'></script>
+        <script src="bluetooth.js"></script>
         <script>
             var socket = io('https://kodegood.com:3000');
+            var bluetooth;
 
             function isWebOS() {
                 return navigator.userAgent.includes('WebAppManager');
@@ -372,9 +377,30 @@
                 cecBridge.call("luna://com.webos.service.cec/activateSource", '{}');
             }
 
+            function requestDevices() {
+                console.log('Requesting any Bluetooth Thermometer...');
+                bluetooth.requestThermometer()
+                .then(device => {
+                    console.log('Found ' + device.name);
+                    console.log('Connecting to GATT Server...');
+                    return device.gatt.connect();
+                })
+                .then(server => {
+                    console.log('Getting Service...');
+                    return server.getPrimaryService();
+                })
+                .catch(error => {
+                  console.log('Argh! ' + error);
+                });
+            }
+
             function joinAsClient() {
+                bluetooth = new Bluetooth();
+                bluetooth.startDiscovery();
+
                 document.getElementById("app").innerHTML = ' \
                     <div>Waiting for a call...</div> \
+                    <button class="button" style="text-align:center;" onclick="requestDevices()">Scan devices</button><br> \
                     ';
                 socket.on('newDoctorCall', function(data) {
                     if (isWebOS()) {
