@@ -162,21 +162,25 @@
             const setPropertiesName = 'setProperties';
             const closeName = 'close';
 
+            let setPropertyBridge;
+            if (isWebOS()) {
+                setPropertyBridge = new WebOSServiceBridge();
+                setPropertyBridge.onservicecallback = function(msg) {
+                    console.log("setcameraproperty msg is" + msg);
+                }
+            }
+
             function setCameraProperty(key, value) {
                 if (!isWebOS()) {
                     console.log("Setting camera properties is not supported ("+key+":"+value+")");
                     return;
                 }
-                const setPropertyBridge = new WebOSServiceBridge();
-                params = {
+                const params = {
                     handle : cameraHandle,
                     params : {}
                 };
                 params.params[key] = value;
                 console.log("Setting " + key + " to " + value);
-                setPropertyBridge.onservicecallback = function(msg) {
-                    console.log("setcameraproperty msg is" + msg);
-                }
                 setPropertyBridge.call(cameraServiceName + "/" + setPropertiesName, JSON.stringify(params));
             }
 
