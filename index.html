@@ -367,6 +367,10 @@
                 cameraBridge.call(cameraServiceName+'/'+getCameraListName, '{}');
             }
 
+            function requestCecActivateSource() {
+                var cecBridge = new WebOSServiceBridge();
+                cecBridge.call("luna://com.webos.service.cec/activateSource", '{}');
+            }
 
             function joinAsClient() {
                 document.getElementById("app").innerHTML = ' \
@@ -399,6 +403,7 @@
                                         ] \
                                     }';
                         bridge.call(url, params);
+                        requestCecActivateSource();
                     } else {
                         document.getElementById("app").innerHTML= ' \
                         <button class="button" style="text-align:center;" onclick="answerDoctorCall()">Answer</button> \
