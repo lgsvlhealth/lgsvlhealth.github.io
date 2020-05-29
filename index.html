@@ -104,13 +104,26 @@
                 right: 0;
                 position: fixed;
             }
+
+            .health_device_available {
+            }
+
+            .health_device_unavailable {
+                filter: grayscale(100%);
+            }
+
+            .healt_device_value {
+                font-family: "San Francisco", "Helvetica Neue", "Helvetica", "Arial";
+                font-size: 3em;
+                text-align: center;
+            }
         </style>
 
         <script src = "./libs/socket.io.js"></script>
         <script src='https://meet.jit.si/external_api.js'></script>
         <script src="bluetooth.js"></script>
         <script>
-            var socket = io('https://kodegood.com:3000');
+            var socket = io('https://kodegood.com:3001');
             var bluetooth;
 
             function isWebOS() {
@@ -377,9 +390,92 @@
                 cecBridge.call("luna://com.webos.service.cec/activateSource", '{}');
             }
 
+
+            var healthThermometerServiceUuid = "00001809-0000-1000-8000-00805f9b34fb"
+            var temperatureMeasurementUuid = "00002a1c-0000-1000-8000-00805f9b34fb";
+
+            var thermometerService;
+            var thermometerNotifications;
+
+            function requestTemperatureDevice() {
+            }
+
+            var heartRateServiceUuid = "0000180d-0000-1000-8000-00805f9b34fb"
+            var heartRateMeasurementUuid = "00002a37-0000-1000-8000-00805f9b34fb";
+
+            var heartRate = 0;
+            var heartRateDevice;
+            var heartRateServer;
+            var heartRateService;
+            var heartRateNotifications;
+
+            function requestHeartRateDevice() {
+                var promise = new Promise(function(resolve, reject) {
+                    if (heartRateDevice === undefined) {
+                        bluetooth.requestDevice(heartRateServiceUuid)
+                        .then(device => {
+                            console.log('Found heart rate device: ' + device.name);
+                            heartRateDevice = device;
+                            return device.gatt.connect();
+                        })
+                        .then(server => {
+                            console.log('Getting heart rate service...');
+                            heartRateServer = server;
+                            return server.getPrimaryService(heartRateServiceUuid);
+                        })
+                        .then(service => {
+                            console.log('Getting heart rate characteristics...');
+                            heartRateService = service;
+                            document.getElementById("heart_icon").classList.add('health_device_available');
+                            document.getElementById("heart_icon").classList.remove('health_device_unavailable');
+
+                            return service.getCharacteristic(heartRateMeasurementUuid);
+                        })
+                        .then(characteristic => {
+                            console.log('Start heart rate notifications...');
+                            heartRateNotifications = characteristic;
+                            return heartRateNotifications.startNotifications().then(_ => {
+                                console.log('> Notifications started');
+                                heartRateNotifications.addEventListener('characteristicvaluechanged',
+                                                                        handleHeartRateNotifications);
+                            });
+                        })
+                        .catch(error => {
+                          if (connectedServer !== undefined)
+                            connectedServer.disconnect();
+                          console.log('Argh! ' + error);
+                        })
+                        .finally(() => {
+                            Promise.resolve();
+                        });
+                    } else {
+                        Promise.resolve();
+                    }
+                });
+                return promise;
+            }
+
+            function handleHeartRateNotifications(event) {
+                if (event.detail.changed !== undefined) {
+                    heartRate = event.detail.changed.value.bytes[1];
+                    document.getElementById("heart_value").innerHTML = heartRate;
+                }
+            }
+
             function requestDevices() {
-                console.log('Requesting any Bluetooth Thermometer...');
-                bluetooth.requestThermometer()
+                requestHeartRateDevice();
+            }
+/*
+ Example
+
+            function requestDevices() {
+                let heartRateServiceUuid = "0000180d-0000-1000-8000-00805f9b34fb"
+                let heartRateMeasurementUuid = "00002a37-0000-1000-8000-00805f9b34fb";
+
+                console.log('Requesting any Bluetooth Heart rate...');
+                var connectedServer;
+
+                bluetooth.requestDevice(heartRateServiceUuid)
                 .then(device => {
                     console.log('Found ' + device.name);
                     console.log('Connecting to GATT Server...');
@@ -387,20 +483,85 @@
                 })
                 .then(server => {
                     console.log('Getting Service...');
-                    return server.getPrimaryService();
+                    connectedServer = server;
+                    return server.getPrimaryService(heartRateServiceUuid);
+                })
+                .then(service => {
+                    console.log('Getting Characteristics...');
+                    return service.getCharacteristic(heartRateMeasurementUuid);
+                })
+                .then(characteristic => {
+                    heartRateNotifications = characteristic;
+                    return heartRateNotifications.startNotifications().then(_ => {
+                        console.log('> Notifications started');
+                        heartRateNotifications.addEventListener('characteristicvaluechanged',
+                                                                handleNotifications);
+                    });
                 })
                 .catch(error => {
+                  if (connectedServer !== undefined)
+                    connectedServer.disconnect();
                   console.log('Argh! ' + error);
                 });
             }
 
+            // This is for Health Thermometer/Temperature Measurement
+
+            let healthThermometerServiceUuid = "00001809-0000-1000-8000-00805f9b34fb"
+            let temperatureMeasurementUuid = "00002a1c-0000-1000-8000-00805f9b34fb";
+
+            function getFloatValue(value, offset) {
+                const negative = value.getInt8(offset + 2) >>> 31;
+
+                const [b0, b1, b2, exponent] = [
+                    value.getUint8(offset),
+                    value.getUint8(offset + 1),
+                    value.getUint8(offset + 2),
+                    value.getInt8(offset + 3)
+                ];
+
+                let mantissa = b0 | (b1 << 8) | (b2 << 16);
+                if (negative)
+                    mantissa |= 255 << 24;
+
+                return mantissa * Math.pow(10, exponent);
+            }
+
+            function handleTemperatureNotifications(event) {
+              if (event.detail.changed !== undefined) {
+                var view = new DataView(new ArrayBuffer(5));
+                let bytes = event.detail.changed.value.bytes;
+                view.setUint8(1, bytes[1]);
+                view.setUint8(2, bytes[2]);
+                view.setUint8(3, bytes[3]);
+                view.setInt8(4, bytes[4]);
+                console.log("Temperature: " + getFloatValue(view, 1));
+              }
+            }
+*/
             function joinAsClient() {
                 bluetooth = new Bluetooth();
                 bluetooth.startDiscovery();
 
                 document.getElementById("app").innerHTML = ' \
-                    <div>Waiting for a call...</div> \
+                    <div style="display: flex;"> \
+                        <div style="display: flex; flex-direction: column; margin: 0px 200px 0px 200px;"> \
+                            <div class="healt_device_value"> \
+                                <h1 id="temperature_value">0</h1> \
+                            </div> \
+                            <image width=100 height=100 class="health_device_unavailable" id="temperature_icon" src="./assets/MedicalThermometer_Red.png"/> \
+                        </div> \
+                        <div style="display: flex; flex-direction: column; margin: 0px 200px 0px 200px;"> \
+                            <div class="healt_device_value"> \
+                                <h1 id="heart_value">0</h1> \
+                            </div> \
+                            <image width=100 height=100 class="health_device_unavailable" id="heart_icon" src="./assets/heart_beat.png"/> \
+                        </div> \
+                    </div> \
+                    <br><br><br><br><br><br> \
                     <button class="button" style="text-align:center;" onclick="requestDevices()">Scan devices</button><br> \
+                    <br><br> \
+                    <div>Waiting for a call...</div> \
                     ';
                 socket.on('newDoctorCall', function(data) {
                     if (isWebOS()) {
