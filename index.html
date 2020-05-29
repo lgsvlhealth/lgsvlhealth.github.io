@@ -105,6 +105,26 @@
                 position: fixed;
             }
 
+            .health_controls_overlay {
+                height: 100%;
+                z-index: 98;
+                opacity: 0.8;
+                top: 0;
+                left: 20px;
+                position: fixed;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .health_control {
+                display: flex;
+                flex-direction: row;
+                vertical-align: middle;
+                align-items: center;
+            }
+
             .health_device_available {
             }
 
@@ -112,7 +132,7 @@
                 filter: grayscale(100%);
             }
 
-            .healt_device_value {
+            .health_device_value {
                 font-family: "San Francisco", "Helvetica Neue", "Helvetica", "Arial";
                 font-size: 3em;
                 text-align: center;
@@ -123,7 +143,7 @@
         <script src='https://meet.jit.si/external_api.js'></script>
         <script src="bluetooth.js"></script>
         <script>
-            var socket = io('https://kodegood.com:3001');
+            var socket = io('https://kodegood.com:3000');
             var bluetooth;
 
             function isWebOS() {
@@ -146,6 +166,7 @@
 
                     document.getElementById("root").setAttribute("style", "display:none;");
                     document.getElementById("ptz_control_overlay").setAttribute("style", "display:block");
+                    document.getElementById("health_controls_overlay").setAttribute("style", "display:block");
 
                     let someID = Math.random().toString(36).substring(7);
 
@@ -162,6 +183,7 @@
                             ';
                         document.getElementById("root").setAttribute("style", "display:flex;");
                         document.getElementById("ptz_control_overlay").setAttribute("style", "display:none");
+                        document.getElementById("health_controls_overlay").setAttribute("style", "display:none");
                         api.dispose();
                     });
 
@@ -185,6 +207,8 @@
                     console.log("Client got answer");
 
                     document.getElementById("root").setAttribute("style", "display:none;");
+                    document.getElementById("health_controls_overlay").setAttribute("style", "display:block");
+                    document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:block");
 
                     var domain = "meet.jit.si";
                     var options = {
@@ -198,6 +222,9 @@
                             <div>Waiting for a call...</div> \
                             ';
                         document.getElementById("root").setAttribute("style", "display:flex;");
+                        document.getElementById("health_controls_overlay").setAttribute("style", "display:none");
+                        document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:none");
+
                         api.dispose();
                     });
                 });
@@ -426,14 +453,23 @@
                         .then(service => {
                             console.log('Getting heart rate characteristics...');
                             heartRateService = service;
-                            document.getElementById("heart_icon").classList.add('health_device_available');
-                            document.getElementById("heart_icon").classList.remove('health_device_unavailable');
-
                             return service.getCharacteristic(heartRateMeasurementUuid);
                         })
                         .then(characteristic => {
                             console.log('Start heart rate notifications...');
                             heartRateNotifications = characteristic;
+
+                            var heart_elem = document.getElementById("heart_icon");
+                            if (heart_elem) {
+                                heart_elem.classList.add('health_device_available');
+                                heart_elem.classList.remove('health_device_unavailable');
+                            }
+                            var heart_overlay_elem  = document.getElementById("heart_overlay_icon");
+                            if (heart_overlay_elem) {
+                                heart_overlay_elem.classList.add('health_device_available');
+                                heart_overlay_elem.classList.remove('health_device_unavailable');
+                            }
+
                             return heartRateNotifications.startNotifications().then(_ => {
                                 console.log('> Notifications started');
                                 heartRateNotifications.addEventListener('characteristicvaluechanged',
@@ -441,8 +477,8 @@
                             });
                         })
                         .catch(error => {
-                          if (connectedServer !== undefined)
-                            connectedServer.disconnect();
+                          if (heartRateServer !== undefined)
+                            heartRateServer.disconnect();
                           console.log('Argh! ' + error);
                         })
                         .finally(() => {
@@ -458,7 +494,14 @@
             function handleHeartRateNotifications(event) {
                 if (event.detail.changed !== undefined) {
                     heartRate = event.detail.changed.value.bytes[1];
-                    document.getElementById("heart_value").innerHTML = heartRate;
+
+                    var heart_value_elem = document.getElementById("heart_value");
+                    if (heart_value_elem)
+                        heart_value_elem.innerHTML = heartRate;
+
+                    var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
+                    if (heart_value_overlay_elem)
+                        heart_value_overlay_elem.innerHTML = heartRate;
                 }
             }
 
@@ -546,13 +589,13 @@
                 document.getElementById("app").innerHTML = ' \
                     <div style="display: flex;"> \
                         <div style="display: flex; flex-direction: column; margin: 0px 200px 0px 200px;"> \
-                            <div class="healt_device_value"> \
+                            <div class="health_device_value"> \
                                 <h1 id="temperature_value">0</h1> \
                             </div> \
                             <image width=100 height=100 class="health_device_unavailable" id="temperature_icon" src="./assets/MedicalThermometer_Red.png"/> \
                         </div> \
                         <div style="display: flex; flex-direction: column; margin: 0px 200px 0px 200px;"> \
-                            <div class="healt_device_value"> \
+                            <div class="health_device_value"> \
                                 <h1 id="heart_value">0</h1> \
                             </div> \
                             <image width=100 height=100 class="health_device_unavailable" id="heart_icon" src="./assets/heart_beat.png"/> \
@@ -674,6 +717,23 @@
                 <button class="ptz_button" id="ptz_down_button" onclick="moveDown()"><i class="material-icons">keyboard_arrow_down</i></button>
                 <button class="ptz_button" id="ptz_left_button" onclick="moveLeft()"><i class="material-icons">keyboard_arrow_left</i></button>
                 <button class="ptz_button" id="ptz_right_button" onclick="moveRight()"><i class="material-icons">keyboard_arrow_right</i></button>
+            </div>
+        </div>
+        <div class="health_controls_overlay" id="health_controls_overlay" style="display:none">
+            <div class="health_control">
+                <image width=60 height=60 class="health_device_unavailable" id="temperature_overlay_icon" src="./assets/MedicalThermometer_Red.png"/>
+                <div class="health_device_value" style="margin-left: 50px">
+                    <h1 id="temperature_value_overlay">0</h1>
+                </div>
+            </div>
+            <div class="health_control">
+                <image width=60 height=60 class="health_device_unavailable" id="heart_overlay_icon" src="./assets/heart_beat.png"/>
+                <div class="health_device_value" style="margin-left: 50px">
+                    <h1 id="heart_value_overlay">0</h1>
+                </div>
+            </div>
+            <div class="health_control" id="scan_devices_overlay_button" style="display:none">
+                <button class="button" style="text-align:center;" onclick="requestDevices()">Scan devices</button>
             </div>
         </div>
     </body>
