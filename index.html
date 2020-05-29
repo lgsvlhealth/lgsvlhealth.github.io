@@ -116,12 +116,13 @@
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
+                vertical-align: middle;
             }
 
             .health_control {
                 display: flex;
                 flex-direction: row;
-                vertical-align: middle;
+                vertical-align: center;
                 align-items: center;
             }
 
@@ -166,7 +167,7 @@
 
                     document.getElementById("root").setAttribute("style", "display:none;");
                     document.getElementById("ptz_control_overlay").setAttribute("style", "display:block");
-                    document.getElementById("health_controls_overlay").setAttribute("style", "display:block");
+                    document.getElementById("health_controls_overlay").setAttribute("style", "display:flex");
 
                     let someID = Math.random().toString(36).substring(7);
 
@@ -189,6 +190,20 @@
 
                     socket.emit('doctorVideoCall', {roomName: "LGSVLJitsiMeetHealthPOC" + someID});
                 });
+
+                socket.on('heart_rate_available', function(data) {
+                    var heart_overlay_elem  = document.getElementById("heart_overlay_icon");
+                    if (heart_overlay_elem) {
+                        heart_overlay_elem.classList.add('health_device_available');
+                        heart_overlay_elem.classList.remove('health_device_unavailable');
+                    }
+                });
+
+                socket.on('heart_rate', function(data) {
+                    var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
+                    if (heart_value_overlay_elem)
+                        heart_value_overlay_elem.innerHTML = data.heart_rate;
+                });
             }
 
             function joinAsDoctor() {
@@ -207,7 +222,7 @@
                     console.log("Client got answer");
 
                     document.getElementById("root").setAttribute("style", "display:none;");
-                    document.getElementById("health_controls_overlay").setAttribute("style", "display:block");
+                    document.getElementById("health_controls_overlay").setAttribute("style", "display:flex");
                     document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:block");
 
                     var domain = "meet.jit.si";
@@ -227,6 +242,10 @@
 
                         api.dispose();
                     });
+
+                    if (heartRateService !== undefined) {
+                        socket.emit('heart_rate_available', {});
+                    }
                 });
                 socket.on('newPtzCommand', function(data) {
                     console.log("PTZ command received" + JSON.stringify(data));
@@ -470,6 +489,8 @@
                                 heart_overlay_elem.classList.remove('health_device_unavailable');
                             }
 
+                            socket.emit('heart_rate_available', {});
+
                             return heartRateNotifications.startNotifications().then(_ => {
                                 console.log('> Notifications started');
                                 heartRateNotifications.addEventListener('characteristicvaluechanged',
@@ -502,6 +523,8 @@
                     var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
                     if (heart_value_overlay_elem)
                         heart_value_overlay_elem.innerHTML = heartRate;
+
+                    socket.emit('heart_rate', {heart_rate: heartRate});
                 }
             }
 
