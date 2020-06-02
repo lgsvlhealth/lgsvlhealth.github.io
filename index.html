@@ -57,6 +57,7 @@
                         document.getElementById("ptz_control_overlay").setAttribute("style", "display:none");
                         document.getElementById("health_controls_overlay").setAttribute("style", "display:none");
                         api.dispose();
+                        location.reload();
                     });
 
                     socket.emit('doctorVideoCall', {roomName: "LGSVLJitsiMeetHealthPOC" + someID});
@@ -112,6 +113,7 @@
                         document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:none");
 
                         api.dispose();
+                        location.reload();
                     });
 
                     if (heartRateService !== undefined) {
