@@ -18,6 +18,8 @@
             var socket = io('https://kodegood.com:3000');
             var bluetooth;
 
+            var relaunchedForCall = false;
+
             function isWebOS() {
                 return navigator.userAgent.includes('WebAppManager');
             }
@@ -113,6 +115,8 @@
                         document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:none");
 
                         api.dispose();
+                        if (isWebOS() && relaunchedForCall && webOSSystem !== undefined)
+                            webOSSystem.close('EXIT_TO_LASTAPP')
                         location.reload();
                     });
 
@@ -508,6 +512,7 @@
                     ';
                 socket.on('newDoctorCall', function(data) {
                     if (isWebOS()) {
+                        relaunchedForCall = document.hidden;
                         var bridge = new WebOSServiceBridge();
                         var url = "luna://com.webos.notification/createAlert";
                         //bridge.onservicecallback = function (msg) { var response = JSON.parse(msg); };
