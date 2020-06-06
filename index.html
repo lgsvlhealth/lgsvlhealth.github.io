@@ -18,6 +18,8 @@
             var socket = io('https://kodegood.com:3000');
             var bluetooth;
 
+            var relaunchedForCall = false;
+
             function isWebOS() {
                 return navigator.userAgent.includes('WebAppManager');
             }
@@ -57,6 +59,7 @@
                         document.getElementById("ptz_control_overlay").setAttribute("style", "display:none");
                         document.getElementById("health_controls_overlay").setAttribute("style", "display:none");
                         api.dispose();
+                        location.reload();
                     });
 
                     socket.emit('doctorVideoCall', {roomName: "LGSVLJitsiMeetHealthPOC" + someID});
@@ -112,6 +115,9 @@
                         document.getElementById("scan_devices_overlay_button").setAttribute("style", "display:none");
 
                         api.dispose();
+                        if (isWebOS() && relaunchedForCall && webOSSystem !== undefined)
+                            webOSSystem.close('EXIT_TO_LASTAPP')
+                        location.reload();
                     });
 
                     if (heartRateService !== undefined) {
@@ -162,21 +168,25 @@
             const setPropertiesName = 'setProperties';
             const closeName = 'close';
 
+            let setPropertyBridge;
+            if (isWebOS()) {
+                setPropertyBridge = new WebOSServiceBridge();
+                setPropertyBridge.onservicecallback = function(msg) {
+                    console.log("setcameraproperty msg is" + msg);
+                }
+            }
+
             function setCameraProperty(key, value) {
                 if (!isWebOS()) {
                     console.log("Setting camera properties is not supported ("+key+":"+value+")");
                     return;
                 }
-                const setPropertyBridge = new WebOSServiceBridge();
-                params = {
+                const params = {
                     handle : cameraHandle,
                     params : {}
                 };
                 params.params[key] = value;
                 console.log("Setting " + key + " to " + value);
-                setPropertyBridge.onservicecallback = function(msg) {
-                    console.log("setcameraproperty msg is" + msg);
-                }
                 setPropertyBridge.call(cameraServiceName + "/" + setPropertiesName, JSON.stringify(params));
             }
 
@@ -502,6 +512,7 @@
                     ';
                 socket.on('newDoctorCall', function(data) {
                     if (isWebOS()) {
+                        relaunchedForCall = document.hidden;
                         var bridge = new WebOSServiceBridge();
                         var url = "luna://com.webos.notification/createAlert";
                         //bridge.onservicecallback = function (msg) { var response = JSON.parse(msg); };
