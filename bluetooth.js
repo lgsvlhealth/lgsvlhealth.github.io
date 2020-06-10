@@ -1,5 +1,7 @@
 function Bluetooth() {
   this.bridge = new WebOSServiceBridge();
+
+  this.devices = []
 }
 
 Bluetooth.prototype.startDiscovery = function() {
@@ -24,29 +26,36 @@ Bluetooth.prototype.cancelDiscovery = function() {
 }
 
 Bluetooth.prototype.init = function() {
+
+  var promiseResolve;
+  var promiseReject;
+
+  const bridge = new WebOSServiceBridge();
+  bridge.onservicecallback = function (msg) {
+    console.log("getStatus: " + msg);
+    /*
+    var json = JSON.parse(msg);
+    if (json.devices !== undefined) {
+      console.log("json.devices: " + json.devices);
+        for (var i in json.devices) {
+          if (json.devices[i].typeOfDevice === 'ble')
+            console.log("device: " + json.devices[i].name);
+        }
+    }
+    */
+
+    setTimeout( function() {
+      promiseResolve();
+    }, 100);
+  }
+
+  const url = "luna://com.webos.service.bluetooth2/device/getStatus";
+  const params = "{}";
+  bridge.call(url, params);
+
   var promise = new Promise(function(resolve, reject) {
-    const bridge = new WebOSServiceBridge();
-    bridge.onservicecallback = function (msg) {
-      console.log("getStatus: " + msg);
-      /*
-      var json = JSON.parse(msg);
-      if (json.devices !== undefined) {
-        console.log("json.devices: " + json.devices);
-          for (var i in json.devices) {
-            if (json.devices[i].typeOfDevice === 'ble')
-              console.log("device: " + json.devices[i].name);
-          }
-      }
-      */
-
-      setTimeout( function() {
-        resolve();
-      }, 100);
-    }.bind(this)
-
-    const url = "luna://com.webos.service.bluetooth2/device/getStatus";
-    const params = "{}";
-    bridge.call(url, params);
+    promiseResolve = resolve;
+    promiseReject = reject;
   });
   return promise;
 }
@@ -56,6 +65,8 @@ Bluetooth.prototype.requestDevice = function(serviceUuid) {
 
   var promiseResolve;
   var promiseReject;
+
+  var bluetooth = this;
 
   this.init()
   .then(() => {
@@ -67,18 +78,20 @@ Bluetooth.prototype.requestDevice = function(serviceUuid) {
         var json = JSON.parse(msg);
         if (json.device !== undefined) {
           keepScanning = false;
-          this.cancelDiscovery();
+          bluetooth.cancelDiscovery();
           var device = new BluetoothDevice(json.device.name,
                                               json.device.address,
                                               json.device.paired);
           var gatt = new BluetoothRemoteGATTServer(device);
 
-          setTimeout( function() {
+          bluetooth.devices.push(device);
+
+          //setTimeout( function() {
             promiseResolve(device);
-          }, 100);
+          //}, 3000);
         }
       }
-    }.bind(this);
+    }
 
     const url = "luna://com.webos.service.bluetooth2/le/startScan";
     const params = JSON.stringify({
@@ -116,54 +129,62 @@ function BluetoothRemoteGATTServer(device) {
 
 BluetoothRemoteGATTServer.prototype.connect = function() {
   console.log("BluetoothRemoteGATTServer.connect");
-  var that = this;
-  var promise = new Promise(function(resolve, reject) {
-    const bridge = new WebOSServiceBridge();
-    bridge.onservicecallback = function (msg) {
-      console.log(msg);
-      var json = JSON.parse(msg);
-console.log("BluetoothRemoteGATTServer.connect - resolve 2000");
-      setTimeout( function() {
-        if (json.clientId !== undefined) {
-          that.clientId = json.clientId;
-          console.log("BluetoothRemoteGATTServer.connect - connect");
-          resolve(that);
-        } else {
-          console.log("BluetoothRemoteGATTServer.connect - reject");
-          reject("GATT server connect failed");
-        }
-      }, 2000);
-    }.bind(that);
 
-    var url = "luna://com.webos.service.bluetooth2/gatt/connect";
-    var params = JSON.stringify({
-      "address":that.device.address,
-    });
-    bridge.call(url, params);
+  var server = this;
+  var promiseResolve;
+  var promiseReject;
+
+  const bridge = new WebOSServiceBridge();
+  bridge.onservicecallback = function (msg) {
+    console.log("BluetoothRemoteGATTServer.connect callback");
+    console.log(msg);
+    var json = JSON.parse(msg);
+
+    if (json.clientId !== undefined) {
+      server.clientId = json.clientId;
+      setTimeout( function() {
+        promiseResolve(server);
+      }, 2000);
+    } else {
+      promiseReject("GATT server connect failed");
+    }
+  }
+
+  var url = "luna://com.webos.service.bluetooth2/gatt/connect";
+  var params = JSON.stringify({
+    "address":server.device.address,
+  });
+  bridge.call(url, params);
+
+  var promise = new Promise(function(resolve, reject) {
+    promiseResolve = resolve;
+    promiseReject = reject;
   });
   return promise;
 }
 
 BluetoothRemoteGATTServer.prototype.disconnect = function() {
-//  if (this.connected)
-//    return Promise.resolve(this);
+  console.log("BluetoothRemoteGATTServer.disconnect");
 
-  var that = this;
+  var server = this;
+  var promiseResolve;
+  var promiseReject;
+
+  const bridge = new WebOSServiceBridge();
+  bridge.onservicecallback = function (msg) {
+    console.log(msg);
+    promiseResolve(server);
+  }
+
+  var url = "luna://com.webos.service.bluetooth2/gatt/disconnect"
+  var params = JSON.stringify({
+    "clientId":server.clientId,
+  });
+  bridge.call(url, params);
+
   var promise = new Promise(function(resolve, reject) {
-    const bridge = new WebOSServiceBridge();
-    bridge.onservicecallback = function (msg) {
-      console.log(msg);
-
-      setTimeout( function() {
-        resolve(this);
-      }, 100);
-    }.bind(that);
-
-    var url = "luna://com.webos.service.bluetooth2/gatt/connect";
-    var params = JSON.stringify({
-      "address":that.device.address,
-    });
-    bridge.call(url, params);
+    promiseResolve = resolve;
+    promiseReject = reject;
   });
   return promise;
 }
@@ -171,37 +192,41 @@ BluetoothRemoteGATTServer.prototype.disconnect = function() {
 BluetoothRemoteGATTServer.prototype.discoverServices = function() {
   console.log("BluetoothRemoteGATTServer.discoverServices");
   var server = this;
-  var promise = new Promise(function(resolve, reject) {
+  var promiseResolve;
+  var promiseReject;
+
+  const bridge = new WebOSServiceBridge();
+  bridge.onservicecallback = function (msg) {
+    console.log("Discover" + msg);
+    var json = JSON.parse(msg);
+
     setTimeout( function() {
-      const bridge = new WebOSServiceBridge();
-      bridge.onservicecallback = function (msg) {
-        console.log("Discover" + msg);
-        var json = JSON.parse(msg);
-
-        setTimeout( function() {
-          resolve();
-        }, 1000);
-      }
-
-      var url = "luna://com.webos.service.bluetooth2/gatt/discoverServices";
-      var params = JSON.stringify({
-        "address":server.device.address,
-      });
-      bridge.call(url, params);
+      promiseResolve();
     }, 1000);
+  }
+
+  var url = "luna://com.webos.service.bluetooth2/gatt/discoverServices";
+  var params = JSON.stringify({
+    "address":server.device.address,
+  });
+  bridge.call(url, params);
+
+  var promise = new Promise(function(resolve, reject) {
+    promiseResolve = resolve;
+    promiseReject = reject;
   });
   return promise;
 }
 
 BluetoothRemoteGATTServer.prototype.getPrimaryService = function(serviceUuid) {
-  console.log("BluetoothRemoteGATTServer.getServices");
+  console.log("BluetoothRemoteGATTServer.getPrimaryService");
   var server = this;
 
   var promiseResolve;
   var promiseReject;
 
   this.discoverServices()
-  .then(() => {
+  .then(_ => {
     const bridge = new WebOSServiceBridge();
     bridge.onservicecallback = function (msg) {
       console.log(msg);
@@ -293,6 +318,31 @@ function BluetoothGATTCharacteristic(service, clientId, serviceUuid, characteris
   this.bridge = new WebOSServiceBridge();
   this.listeners = {};
 }
+
+BluetoothGATTCharacteristic.prototype.readValue = function() {
+  console.log("BluetoothRemoteGATTServer.readValue");
+  var characteristic = this;
+
+  var promise = new Promise(function(resolve, reject) {
+    characteristic.bridge.onservicecallback = function (msg) {
+      console.log("read value callback" + msg);
+      var json = JSON.parse(msg);
+
+      resolve(json.value.value.bytes)
+    }
+
+    var url = "luna://com.webos.service.bluetooth2/gatt/readCharacteristicValue";
+    var params = JSON.stringify({
+      "address":characteristic.service.device.address,
+      "service":characteristic.serviceUuid,
+      "characteristic":characteristic.characteristicUuid,
+    });
+    characteristic.bridge.call(url, params);
+  });
+
+  return promise;
+}
+
 
 BluetoothGATTCharacteristic.prototype.startNotifications = function() {
   console.log("BluetoothRemoteGATTServer.startNotifications");
