@@ -156,6 +156,14 @@
                             console.log("Unhandled PTZ command");
                     }
                 });
+                socket.on('newReadHeartRate', function(data) {
+                    console.log("Read heart rate command received");
+                    readHeartRate();
+                });
+                socket.on('newReadThermometer', function(data) {
+                    console.log("Read thermometer command received");
+                    readThermometer();
+                });
             }
 
             var cameraBridge;
