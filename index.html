@@ -19,6 +19,7 @@
             var bluetooth;
 
             var relaunchedForCall = false;
+            var isClient = false;
 
             function isWebOS() {
                 return navigator.userAgent.includes('WebAppManager');
@@ -84,6 +85,7 @@
             }
 
             function joinAsDoctor() {
+                isClient = false;
                 document.getElementById("app").innerHTML = ' \
                     <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
                     ';
@@ -529,6 +531,7 @@
             }
 
             function readHeartRate() {
+                console.log("Read heartrate requested locally");
                 if (heartRateCharacteristic !== undefined) {
                     heartRateCharacteristic.readValue()
                     .then(bytes => {
@@ -547,7 +550,36 @@
                 }
             }
 
+            function readThermometer() {
+                console.log("Read thermometer requested locally");
+            }
+
+            function sendReadHeartRate() {
+                console.log("Read heart rate request sent to client");
+                socket.emit('readHeartRate', {});
+            }
+
+            function sendReadThermometer() {
+                console.log("Read thermometer request sent to client");
+                socket.emit('readThermometer', {});
+            }
+
+            function refreshHeartDevice() {
+                if (isClient)
+                    readHeartRate();
+                else
+                    sendReadHeartRate();
+            }
+
+            function refreshThermometerDevice() {
+                if (isClient)
+                    readThermometer();
+                else
+                    sendReadThermometer();
+            }
+
             function joinAsClient() {
+                isClient = true;
                 bluetooth = new Bluetooth();
                 bluetooth.startDiscovery();
 
