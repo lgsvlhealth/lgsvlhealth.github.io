@@ -321,11 +321,115 @@
             var healthThermometerServiceUuid = "00001809-0000-1000-8000-00805f9b34fb"
             var temperatureMeasurementUuid = "00002a1c-0000-1000-8000-00805f9b34fb";
 
+            var temperature = 0;
+            var thermometerDevice;
+            var thermometerServer;
             var thermometerService;
             var thermometerNotifications;
 
-            function requestTemperatureDevice() {
+            function requestThermometerDevice() {
+                console.log('requestThermometerDevice');
+                var promise = new Promise(function(resolve, reject) {
+                    if (heartRateDevice === undefined) {
+                        bluetooth.requestDevice(healthThermometerServiceUuid)
+                        .then(device => {
+                            console.log('Found thermometer device: ' + device.name);
+                            thermometerDevice = device;
+                            return device.gatt.connect();
+                        })
+                        .then(server => {
+                            console.log('Getting thermometer service...');
+                            thermometerServer = server;
+                            return server.getPrimaryService(healthThermometerServiceUuid);
+                        })
+                        .then(service => {
+                            console.log('Getting thermometer characteristics...');
+                            thermometerService = service;
+                            return service.getCharacteristic(temperatureMeasurementUuid);
+                        })
+                        .then(characteristic => {
+                            console.log('Got thermometer characteristics...');
+                            thermometerNotifications = characteristic;
+
+                            var heart_elem = document.getElementById("temperature_icon");
+                            if (heart_elem) {
+                                heart_elem.classList.add('health_device_available');
+                                heart_elem.classList.remove('health_device_unavailable');
+                            }
+                            var heart_overlay_elem  = document.getElementById("temperature_overlay_icon");
+                            if (heart_overlay_elem) {
+                                heart_overlay_elem.classList.add('health_device_available');
+                                heart_overlay_elem.classList.remove('health_device_unavailable');
+                            }
+
+                            socket.emit('temperature_available', {});
+                            /*
+                            return thermometerNotifications.startNotifications().then(_ => {
+                                console.log('> Notifications started');
+                                thermometerNotifications.addEventListener('characteristicvaluechanged',
+                                                                        handleTemperatureNotifications);
+
+                            });
+                            */
+                        })
+                        .catch(error => {
+                          if (thermometerServer !== undefined)
+                            thermometerServer.disconnect();
+                          console.log('Argh! ' + error);
+                        })
+                        .finally(() => {
+                            resolve();
+                        });
+                    } else {
+                        reject();
+                    }
+                });
+                return promise;
             }
+
+            var int8 = new Int8Array(4);
+            var int32 = new Int32Array(int8.buffer, 0, 1);
+            var float32 = new Float32Array(int8.buffer, 0, 1);
+
+            function floatToIntBits(f) {
+                float32[0] = f;
+                return int32[0];
+            };
+
+            function intBitsToFloat(i) {
+                int32[0] = i;
+                return float32[0];
+            };
+
+            function getFloatValue(value, offset) {
+                const negative = value.getInt8(offset + 2) >>> 31;
+
+                const [b0, b1, b2, exponent] = [
+                    value.getUint8(offset),
+                    value.getUint8(offset + 1),
+                    value.getUint8(offset + 2),
+                    value.getInt8(offset + 3)
+                ];
+
+                let mantissa = b0 | (b1 << 8) | (b2 << 16);
+                if (negative)
+                    mantissa |= 255 << 24;
+
+                return -intBitsToFloat(((exponent << 23) | mantissa)).toFixed(1);
+            }
+
+            function handleTemperatureNotifications(event) {
+              if (event.detail.changed !== undefined) {
+                var view = new DataView(new ArrayBuffer(5));
+                let bytes = event.detail.changed.value.bytes;
+                view.setUint8(1, bytes[1]);
+                view.setUint8(2, bytes[2]);
+                view.setUint8(3, bytes[3]);
+                view.setInt8(4, bytes[4]);
+                console.log("Temperature: " + getFloatValue(view, 1));
+              }
+            }
+
 
             var heartRateServiceUuid = "0000180d-0000-1000-8000-00805f9b34fb"
             var heartRateMeasurementUuid = "00002a37-0000-1000-8000-00805f9b34fb";
@@ -337,6 +441,7 @@
             var heartRateNotifications;
 
             function requestHeartRateDevice() {
+                console.log('requestHeartRateDevice');
                 var promise = new Promise(function(resolve, reject) {
                     if (heartRateDevice === undefined) {
                         bluetooth.requestDevice(heartRateServiceUuid)
@@ -356,8 +461,8 @@
                             return service.getCharacteristic(heartRateMeasurementUuid);
                         })
                         .then(characteristic => {
-                            console.log('Start heart rate notifications...');
-                            heartRateNotifications = characteristic;
+                            console.log('Got heart rate characteristics...');
+                            heartRateCharacteristic = characteristic;
 
                             var heart_elem = document.getElementById("heart_icon");
                             if (heart_elem) {
@@ -371,12 +476,13 @@
                             }
 
                             socket.emit('heart_rate_available', {});
-
+/*
                             return heartRateNotifications.startNotifications().then(_ => {
                                 console.log('> Notifications started');
                                 heartRateNotifications.addEventListener('characteristicvaluechanged',
                                                                         handleHeartRateNotifications);
                             });
+*/
                         })
                         .catch(error => {
                           if (heartRateServer !== undefined)
@@ -384,10 +490,10 @@
                           console.log('Argh! ' + error);
                         })
                         .finally(() => {
-                            Promise.resolve();
+                            resolve();
                         });
                     } else {
-                        Promise.resolve();
+                        reject();
                     }
                 });
                 return promise;
@@ -410,82 +516,31 @@
             }
 
             function requestDevices() {
-                requestHeartRateDevice();
+                requestThermometerDevice()
+                .then(_ =>
+                    requestHeartRateDevice()
+                );
             }
+
+            function readHeartRate() {
+                if (heartRateCharacteristic !== undefined) {
+                    heartRateCharacteristic.readValue()
+                    .then(bytes => {
 /*
- Example
+                        heartRate = bytes[1];
+                        var heart_value_elem = document.getElementById("heart_value");
+                        if (heart_value_elem)
+                            heart_value_elem.innerHTML = heartRate;
 
-            function requestDevices() {
-                let heartRateServiceUuid = "0000180d-0000-1000-8000-00805f9b34fb"
-                let heartRateMeasurementUuid = "00002a37-0000-1000-8000-00805f9b34fb";
-
-                console.log('Requesting any Bluetooth Heart rate...');
-                var connectedServer;
-
-                bluetooth.requestDevice(heartRateServiceUuid)
-                .then(device => {
-                    console.log('Found ' + device.name);
-                    console.log('Connecting to GATT Server...');
-                    return device.gatt.connect();
-                })
-                .then(server => {
-                    console.log('Getting Service...');
-                    connectedServer = server;
-                    return server.getPrimaryService(heartRateServiceUuid);
-                })
-                .then(service => {
-                    console.log('Getting Characteristics...');
-                    return service.getCharacteristic(heartRateMeasurementUuid);
-                })
-                .then(characteristic => {
-                    heartRateNotifications = characteristic;
-                    return heartRateNotifications.startNotifications().then(_ => {
-                        console.log('> Notifications started');
-                        heartRateNotifications.addEventListener('characteristicvaluechanged',
-                                                                handleNotifications);
-                    });
-                })
-                .catch(error => {
-                  if (connectedServer !== undefined)
-                    connectedServer.disconnect();
-                  console.log('Argh! ' + error);
-                });
-            }
-
-            // This is for Health Thermometer/Temperature Measurement
-
-            let healthThermometerServiceUuid = "00001809-0000-1000-8000-00805f9b34fb"
-            let temperatureMeasurementUuid = "00002a1c-0000-1000-8000-00805f9b34fb";
-
-            function getFloatValue(value, offset) {
-                const negative = value.getInt8(offset + 2) >>> 31;
-
-                const [b0, b1, b2, exponent] = [
-                    value.getUint8(offset),
-                    value.getUint8(offset + 1),
-                    value.getUint8(offset + 2),
-                    value.getInt8(offset + 3)
-                ];
-
-                let mantissa = b0 | (b1 << 8) | (b2 << 16);
-                if (negative)
-                    mantissa |= 255 << 24;
-
-                return mantissa * Math.pow(10, exponent);
-            }
-
-            function handleTemperatureNotifications(event) {
-              if (event.detail.changed !== undefined) {
-                var view = new DataView(new ArrayBuffer(5));
-                let bytes = event.detail.changed.value.bytes;
-                view.setUint8(1, bytes[1]);
-                view.setUint8(2, bytes[2]);
-                view.setUint8(3, bytes[3]);
-                view.setInt8(4, bytes[4]);
-                console.log("Temperature: " + getFloatValue(view, 1));
-              }
-            }
+                        var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
+                        if (heart_value_overlay_elem)
+                            heart_value_overlay_elem.innerHTML = heartRate;
 */
+                        //socket.emit('heart_rate', {heart_rate: heartRate});
+                    });
+                }
+            }
+
             function joinAsClient() {
                 bluetooth = new Bluetooth();
                 bluetooth.startDiscovery();
@@ -598,6 +653,8 @@
                     cameraBridge.call(cameraServiceName + "/" + closeName, JSON.stringify(params));
                 }
             }
+
+
         </script>
     </head>
     <body onload="init()" onunload="freeResources()">
@@ -631,14 +688,14 @@
                     <h1 id="temperature_value_overlay">0</h1>
                 </div>
             </div>
+            <div class="health_control" id="scan_devices_overlay_button" style="display:none">
+                <button class="button" style="text-align:center;" onclick="readHeartRate()">Read heart rate</button>
+            </div>
             <div class="health_control">
                 <image width=60 height=60 class="health_device_unavailable" id="heart_overlay_icon" src="./assets/heart_beat.png"/>
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="heart_value_overlay">0</h1>
                 </div>
-            </div>
-            <div class="health_control" id="scan_devices_overlay_button" style="display:none">
-                <button class="button" style="text-align:center;" onclick="requestDevices()">Scan devices</button>
             </div>
         </div>
     </body>
