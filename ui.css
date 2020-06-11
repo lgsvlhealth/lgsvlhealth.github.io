@@ -72,6 +72,36 @@ body {
   color: #555555;
 }
 
+.refresh_button {
+    background-color: transparent;
+    border: none;
+    margin: 2px 2px;
+    width: 60px;
+    height: 60px;
+}
+
+.refresh_button .material-icons {
+    font-size: 48px;
+    color: lightgrey;
+    vertical-align: center;
+    text-align: center;
+}
+
+.refresh_button .material-icons:hover {
+    font-size: 48px;
+    color: whitesmoke;
+    vertical-align: center;
+    text-align: center;
+}
+
+.refresh_button:focus {
+    outline: none;
+}
+
+.refresh_button.unavailable {
+    display: none;
+}
+
 .ptz_control {
     text-align: right;
     float: right;

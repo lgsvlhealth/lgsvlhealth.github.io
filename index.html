@@ -19,6 +19,7 @@
             var bluetooth;
 
             var relaunchedForCall = false;
+            var isClient = false;
 
             function isWebOS() {
                 return navigator.userAgent.includes('WebAppManager');
@@ -71,6 +72,9 @@
                         heart_overlay_elem.classList.add('health_device_available');
                         heart_overlay_elem.classList.remove('health_device_unavailable');
                     }
+                    const heart_refresh_button  = document.getElementById("refresh_heart_button");
+                    refresh_heart_button.classList.add('available');
+                    refresh_heart_button.classList.remove('unavailable');
                 });
 
                 socket.on('heart_rate', function(data) {
@@ -81,6 +85,7 @@
             }
 
             function joinAsDoctor() {
+                isClient = false;
                 document.getElementById("app").innerHTML = ' \
                     <button class="button" style="text-align:center;" onclick="doDoctorCall()">Call client</button> \
                     ';
@@ -150,6 +155,14 @@
                         default:
                             console.log("Unhandled PTZ command");
                     }
+                });
+                socket.on('newReadHeartRate', function(data) {
+                    console.log("Read heart rate command received");
+                    readHeartRate();
+                });
+                socket.on('newReadThermometer', function(data) {
+                    console.log("Read thermometer command received");
+                    readThermometer();
                 });
             }
 
@@ -474,6 +487,9 @@
                                 heart_overlay_elem.classList.add('health_device_available');
                                 heart_overlay_elem.classList.remove('health_device_unavailable');
                             }
+                            const refresh_heart_button = document.getElementById('refresh_heart_button');
+                            refresh_heart_button.classList.add('available');
+                            refresh_heart_button.classList.remove('unavailable');
 
                             socket.emit('heart_rate_available', {});
 /*
@@ -523,6 +539,7 @@
             }
 
             function readHeartRate() {
+                console.log("Read heartrate requested locally");
                 if (heartRateCharacteristic !== undefined) {
                     heartRateCharacteristic.readValue()
                     .then(bytes => {
@@ -541,7 +558,36 @@
                 }
             }
 
+            function readThermometer() {
+                console.log("Read thermometer requested locally");
+            }
+
+            function sendReadHeartRate() {
+                console.log("Read heart rate request sent to client");
+                socket.emit('readHeartRate', {});
+            }
+
+            function sendReadThermometer() {
+                console.log("Read thermometer request sent to client");
+                socket.emit('readThermometer', {});
+            }
+
+            function refreshHeartDevice() {
+                if (isClient)
+                    readHeartRate();
+                else
+                    sendReadHeartRate();
+            }
+
+            function refreshThermometerDevice() {
+                if (isClient)
+                    readThermometer();
+                else
+                    sendReadThermometer();
+            }
+
             function joinAsClient() {
+                isClient = true;
                 bluetooth = new Bluetooth();
                 bluetooth.startDiscovery();
 
@@ -687,6 +733,7 @@
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="temperature_value_overlay">0</h1>
                 </div>
+                <button class="refresh_button unavailable" id="refresh_thermometer_button" onclick="refreshThermometerDevice()"><i class="material-icons">refresh</i></button>
             </div>
             <div class="health_control" id="scan_devices_overlay_button" style="display:none">
                 <button class="button" style="text-align:center;" onclick="readHeartRate()">Read heart rate</button>
@@ -696,6 +743,7 @@
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="heart_value_overlay">0</h1>
                 </div>
+                <button class="refresh_button unavailable" id="refresh_heart_button" onclick="refreshHeartDevice()"><i class="material-icons">refresh</i></button>
             </div>
         </div>
     </body>
