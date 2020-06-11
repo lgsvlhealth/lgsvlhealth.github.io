@@ -71,6 +71,9 @@
                         heart_overlay_elem.classList.add('health_device_available');
                         heart_overlay_elem.classList.remove('health_device_unavailable');
                     }
+                    const heart_refresh_button  = document.getElementById("refresh_heart_button");
+                    refresh_heart_button.classList.add('available');
+                    refresh_heart_button.classList.remove('unavailable');
                 });
 
                 socket.on('heart_rate', function(data) {
@@ -474,6 +477,9 @@
                                 heart_overlay_elem.classList.add('health_device_available');
                                 heart_overlay_elem.classList.remove('health_device_unavailable');
                             }
+                            const refresh_heart_button = document.getElementById('refresh_heart_button');
+                            refresh_heart_button.classList.add('available');
+                            refresh_heart_button.classList.remove('unavailable');
 
                             socket.emit('heart_rate_available', {});
 /*
@@ -687,6 +693,7 @@
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="temperature_value_overlay">0</h1>
                 </div>
+                <button class="refresh_button unavailable" id="refresh_thermometer_button" onclick="refreshThermometerDevice()"><i class="material-icons">refresh</i></button>
             </div>
             <div class="health_control" id="scan_devices_overlay_button" style="display:none">
                 <button class="button" style="text-align:center;" onclick="readHeartRate()">Read heart rate</button>
@@ -696,6 +703,7 @@
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="heart_value_overlay">0</h1>
                 </div>
+                <button class="refresh_button unavailable" id="refresh_heart_button" onclick="refreshHeartDevice()"><i class="material-icons">refresh</i></button>
             </div>
         </div>
     </body>
