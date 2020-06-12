@@ -73,14 +73,31 @@
                         heart_overlay_elem.classList.remove('health_device_unavailable');
                     }
                     const heart_refresh_button  = document.getElementById("refresh_heart_button");
-                    refresh_heart_button.classList.add('available');
-                    refresh_heart_button.classList.remove('unavailable');
+                    heart_refresh_button.classList.add('available');
+                    heart_refresh_button.classList.remove('unavailable');
                 });
 
                 socket.on('heart_rate', function(data) {
                     var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
                     if (heart_value_overlay_elem)
                         heart_value_overlay_elem.innerHTML = data.heart_rate;
+                });
+
+                socket.on('temperature_available', function(data) {
+                    var temperature_overlay_elem  = document.getElementById("temperature_overlay_icon");
+                    if (temperature_overlay_elem) {
+                        temperature_overlay_elem.classList.add('health_device_available');
+                        temperature_overlay_elem.classList.remove('health_device_unavailable');
+                    }
+                    const temperature_refresh_button  = document.getElementById("refresh_temperature_button");
+                    temperature_refresh_button.classList.add('available');
+                    temperature_refresh_button.classList.remove('unavailable');
+                });
+
+                socket.on('temperature', function(data) {
+                    var heart_value_overlay_elem = document.getElementById("temperature_value_overlay");
+                    if (heart_value_overlay_elem)
+                        heart_value_overlay_elem.innerHTML = data.temperature;
                 });
             }
 
@@ -127,6 +144,10 @@
 
                     if (heartRateService !== undefined) {
                         socket.emit('heart_rate_available', {});
+                    }
+
+                    if (thermometerService !== undefined) {
+                        socket.emit('temperature_available', {});
                     }
                 });
                 socket.on('newPtzCommand', function(data) {
@@ -340,19 +361,78 @@
             var thermometerService;
             var thermometerNotifications;
 
+
+            function resolveAndConnectThermometerDevice() {
+                var promiseResolve;
+                var promiseReject;
+
+                if (localStorage.getItem("prevThermometerName") !== undefined) {
+                    var tmpDevice = new BluetoothDevice(localStorage.getItem("prevThermometerName"),
+                                                        localStorage.getItem("prevThermometerAddress"),
+                                                        localStorage.getItem("prevThermometerPaired"));
+                    var tmpServer = new BluetoothRemoteGATTServer(tmpDevice);
+                    tmpServer.clientId = localStorage.getItem("prevThermometerClientId")
+
+                    console.log('Found old thermometer device: ' + tmpDevice.name);
+                    tmpDevice.gatt.connect()
+                    .then(device => {
+                        console.log('Connected to old thermometer device: ' + tmpDevice.name);
+                        thermometerDevice = tmpDevice;
+                        promiseResolve(tmpServer)
+                    }).catch(e => {
+                        if (e.errorCode === 131) {
+                            console.log("Already connected!!!!!!!!!!!!!!!!!!!!!!!");
+                            thermometerDevice = tmpDevice;
+                            promiseResolve(tmpServer)
+                        } else {
+                            console.log('ERRORR: ' + e );
+                            bluetooth.requestDevice(healthThermometerServiceUuid)
+                            .then(device => {
+                                console.log('Found new thermometer device1: ' + device.name);
+                                thermometerDevice = device;
+                                device.gatt.connect()
+                                .then(server =>
+                                    promiseResolve(server)
+                                );
+                            });
+                        }
+                    }).finally(_ => {
+                        console.log("Foobar1");
+                    });
+                } else {
+                    console.log('Request new thermometer instance');
+                    bluetooth.requestDevice(healthThermometerServiceUuid)
+                    .then(device => {
+                        console.log('Found new thermometer device2: ' + device.name);
+                        thermometerDevice = device;
+                        device.gatt.connect()
+                        .then(server =>
+                            promiseResolve(server)
+                        );
+                    });
+                }
+
+                var promise = new Promise(function(resolve, reject) {
+                    promiseResolve = resolve;
+                    promiseReject = reject;
+                });
+                return promise;
+            }
+
             function requestThermometerDevice() {
                 console.log('requestThermometerDevice');
                 var promise = new Promise(function(resolve, reject) {
                     if (heartRateDevice === undefined) {
-                        bluetooth.requestDevice(healthThermometerServiceUuid)
-                        .then(device => {
-                            console.log('Found thermometer device: ' + device.name);
-                            thermometerDevice = device;
-                            return device.gatt.connect();
-                        })
+                        resolveAndConnectThermometerDevice()
                         .then(server => {
                             console.log('Getting thermometer service...');
                             thermometerServer = server;
+
+                            localStorage.setItem("prevThermometerName", thermometerDevice.name);
+                            localStorage.setItem("prevThermometerAddress", thermometerDevice.address);
+                            localStorage.setItem("prevThermometerPaired", thermometerDevice.paired);
+                            localStorage.setItem("prevThermometerClientId", thermometerServer.clientId);
+
                             return server.getPrimaryService(healthThermometerServiceUuid);
                         })
                         .then(service => {
@@ -364,26 +444,28 @@
                             console.log('Got thermometer characteristics...');
                             thermometerNotifications = characteristic;
 
-                            var heart_elem = document.getElementById("temperature_icon");
-                            if (heart_elem) {
-                                heart_elem.classList.add('health_device_available');
-                                heart_elem.classList.remove('health_device_unavailable');
+                            var temperature_elem = document.getElementById("temperature_icon");
+                            if (temperature_elem) {
+                                temperature_elem.classList.add('health_device_available');
+                                temperature_elem.classList.remove('health_device_unavailable');
                             }
-                            var heart_overlay_elem  = document.getElementById("temperature_overlay_icon");
-                            if (heart_overlay_elem) {
-                                heart_overlay_elem.classList.add('health_device_available');
-                                heart_overlay_elem.classList.remove('health_device_unavailable');
+                            var temperature_overlay_elem  = document.getElementById("temperature_overlay_icon");
+                            if (temperature_overlay_elem) {
+                                temperature_overlay_elem.classList.add('health_device_available');
+                                temperature_overlay_elem.classList.remove('health_device_unavailable');
                             }
+                            const refresh_temperature_button = document.getElementById('refresh_temperature_button');
+                            refresh_temperature_button.classList.add('available');
+                            refresh_temperature_button.classList.remove('unavailable');
 
                             socket.emit('temperature_available', {});
-                            /*
+
                             return thermometerNotifications.startNotifications().then(_ => {
                                 console.log('> Notifications started');
                                 thermometerNotifications.addEventListener('characteristicvaluechanged',
                                                                         handleTemperatureNotifications);
 
                             });
-                            */
                         })
                         .catch(error => {
                           if (thermometerServer !== undefined)
@@ -439,7 +521,17 @@
                 view.setUint8(2, bytes[2]);
                 view.setUint8(3, bytes[3]);
                 view.setInt8(4, bytes[4]);
-                console.log("Temperature: " + getFloatValue(view, 1));
+
+                temperature = getFloatValue(view, 1);
+                console.log("Temperature: " + temperature);
+
+                 var temperature_value_elem = document.getElementById("temperature_value");
+                if (temperature_value_elem)
+                    temperature_value_elem.innerHTML = temperature;
+
+                var temperature_value_overlay_elem = document.getElementById("temperature_value_overlay");
+                if (temperature_value_overlay_elem)
+                    temperature_value_overlay_elem.innerHTML = temperature;
               }
             }
 
@@ -452,6 +544,63 @@
             var heartRateServer;
             var heartRateService;
             var heartRateNotifications;
+
+            function resolveAndConnectHeartRateDevice() {
+                var promiseResolve;
+                var promiseReject;
+
+                if (localStorage.getItem("prevHeartRateName") !== undefined) {
+                    var tmpDevice = new BluetoothDevice(localStorage.getItem("prevHeartRateName"),
+                                                        localStorage.getItem("prevHeartRateAddress"),
+                                                        localStorage.getItem("prevHeartRatePaired"));
+                    var tmpServer = new BluetoothRemoteGATTServer(tmpDevice);
+                    tmpServer.clientId = localStorage.getItem("prevHeartRateClientId")
+
+                    console.log('Found old heart rate device: ' + tmpDevice.name);
+                    tmpDevice.gatt.connect()
+                    .then(device => {
+                        console.log('Connected to old heart rate device: ' + tmpDevice.name);
+                        heartRateDevice = tmpDevice;
+                        promiseResolve(tmpServer)
+                    }).catch(e => {
+                        if (e.errorCode === 131) {
+                            console.log("Already connected!!!!!!!!!!!!!!!!!!!!!!!");
+                            heartRateDevice = tmpDevice;
+                            promiseResolve(tmpServer)
+                        } else {
+                            console.log('ERRORR: ' + e );
+                            bluetooth.requestDevice(healthThermometerServiceUuid)
+                            .then(device => {
+                                console.log('Found new heart rate device1: ' + device.name);
+                                heartRateDevice = device;
+                                device.gatt.connect()
+                                .then(server =>
+                                    promiseResolve(server)
+                                );
+                            });
+                        }
+                    }).finally(_ => {
+                        console.log("Foobar1");
+                    });
+                } else {
+                    console.log('Request new heart rate instance');
+                    bluetooth.requestDevice(healthThermometerServiceUuid)
+                    .then(device => {
+                        console.log('Found new heart rate device2: ' + device.name);
+                        heartRateDevice = device;
+                        device.gatt.connect()
+                        .then(server =>
+                            promiseResolve(server)
+                        );
+                    });
+                }
+
+                var promise = new Promise(function(resolve, reject) {
+                    promiseResolve = resolve;
+                    promiseReject = reject;
+                });
+                return promise;
+            }
 
             function requestHeartRateDevice() {
                 console.log('requestHeartRateDevice');
@@ -466,6 +615,12 @@
                         .then(server => {
                             console.log('Getting heart rate service...');
                             heartRateServer = server;
+
+                            localStorage.setItem("prevHeartRateName", heartRateDevice.name);
+                            localStorage.setItem("prevHeartRateAddress", heartRateDevice.address);
+                            localStorage.setItem("prevHeartRatePaired", heartRateDevice.paired);
+                            localStorage.setItem("prevHeartRateClientId", heartRateServer.clientId);
+
                             return server.getPrimaryService(heartRateServiceUuid);
                         })
                         .then(service => {
@@ -475,7 +630,7 @@
                         })
                         .then(characteristic => {
                             console.log('Got heart rate characteristics...');
-                            heartRateCharacteristic = characteristic;
+                            heartRateNotifications = characteristic;
 
                             var heart_elem = document.getElementById("heart_icon");
                             if (heart_elem) {
@@ -492,13 +647,13 @@
                             refresh_heart_button.classList.remove('unavailable');
 
                             socket.emit('heart_rate_available', {});
-/*
+
                             return heartRateNotifications.startNotifications().then(_ => {
-                                console.log('> Notifications started');
+                                console.log('Started listening heart rate notifications');
                                 heartRateNotifications.addEventListener('characteristicvaluechanged',
                                                                         handleHeartRateNotifications);
                             });
-*/
+
                         })
                         .catch(error => {
                           if (heartRateServer !== undefined)
@@ -516,6 +671,7 @@
             }
 
             function handleHeartRateNotifications(event) {
+                console.log("handleHeartRateNotifications")
                 if (event.detail.changed !== undefined) {
                     heartRate = event.detail.changed.value.bytes[1];
 
@@ -527,23 +683,26 @@
                     if (heart_value_overlay_elem)
                         heart_value_overlay_elem.innerHTML = heartRate;
 
-                    socket.emit('heart_rate', {heart_rate: heartRate});
+                    //socket.emit('heart_rate', {heart_rate: heartRate});
                 }
             }
 
             function requestDevices() {
                 requestThermometerDevice()
-                .then(_ =>
-                    requestHeartRateDevice()
-                );
+                .then(_ => {
+                    setTimeout( function() {
+                        requestHeartRateDevice()
+                    }, 2000);
+                });
             }
 
             function readHeartRate() {
-                console.log("Read heartrate requested locally");
+                console.log("Read heartrate requested by doctor");
+                socket.emit('heart_rate', {heart_rate: heartRate});
+                /*
                 if (heartRateCharacteristic !== undefined) {
                     heartRateCharacteristic.readValue()
                     .then(bytes => {
-/*
                         heartRate = bytes[1];
                         var heart_value_elem = document.getElementById("heart_value");
                         if (heart_value_elem)
@@ -552,14 +711,16 @@
                         var heart_value_overlay_elem = document.getElementById("heart_value_overlay");
                         if (heart_value_overlay_elem)
                             heart_value_overlay_elem.innerHTML = heartRate;
-*/
-                        //socket.emit('heart_rate', {heart_rate: heartRate});
+
+                        socket.emit('heart_rate', {heart_rate: heartRate});
                     });
                 }
+                */
             }
 
             function readThermometer() {
-                console.log("Read thermometer requested locally");
+                console.log("Read thermometer requested by doctor");
+                socket.emit('temperature', {temperature: temperature});
             }
 
             function sendReadHeartRate() {
@@ -646,6 +807,8 @@
                         ';
                     }
                 });
+
+                requestDevices();
             }
 
             function zoomIn() {
@@ -733,7 +896,7 @@
                 <div class="health_device_value" style="margin-left: 50px">
                     <h1 id="temperature_value_overlay">0</h1>
                 </div>
-                <button class="refresh_button unavailable" id="refresh_thermometer_button" onclick="refreshThermometerDevice()"><i class="material-icons">refresh</i></button>
+                <button class="refresh_button unavailable" id="refresh_temperature_button" onclick="refreshThermometerDevice()"><i class="material-icons">refresh</i></button>
             </div>
             <div class="health_control" id="scan_devices_overlay_button" style="display:none">
                 <button class="button" style="text-align:center;" onclick="readHeartRate()">Read heart rate</button>
