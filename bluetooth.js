@@ -44,9 +44,7 @@ Bluetooth.prototype.init = function() {
     }
     */
 
-    setTimeout( function() {
-      promiseResolve();
-    }, 100);
+    promiseResolve();
   }
 
   const url = "luna://com.webos.service.bluetooth2/device/getStatus";
@@ -77,6 +75,7 @@ Bluetooth.prototype.requestDevice = function(serviceUuid) {
         console.log("requestDevice: " + msg);
         var json = JSON.parse(msg);
         if (json.device !== undefined) {
+          console.log("cancel scanning");
           keepScanning = false;
           bluetooth.cancelDiscovery();
           var device = new BluetoothDevice(json.device.name,
@@ -146,7 +145,7 @@ BluetoothRemoteGATTServer.prototype.connect = function() {
         promiseResolve(server);
       }, 2000);
     } else {
-      promiseReject("GATT server connect failed");
+      promiseReject(json);
     }
   }
 
@@ -305,6 +304,7 @@ BluetoothRemoteGATTService.prototype.getCharacteristic = function(characteristic
       reject("Foobar")
     }
   });
+
   return promise;
 }
 
@@ -322,24 +322,28 @@ function BluetoothGATTCharacteristic(service, clientId, serviceUuid, characteris
 BluetoothGATTCharacteristic.prototype.readValue = function() {
   console.log("BluetoothRemoteGATTServer.readValue");
   var characteristic = this;
+  var promiseResolve;
+  var promiseReject;
 
-  var promise = new Promise(function(resolve, reject) {
-    characteristic.bridge.onservicecallback = function (msg) {
-      console.log("read value callback" + msg);
-      var json = JSON.parse(msg);
+  characteristic.bridge.onservicecallback = function (msg) {
+    console.log("read value callback" + msg);
+    var json = JSON.parse(msg);
 
-      resolve(json.value.value.bytes)
-    }
+    promiseResolve(json.value.value.bytes)
+  }
 
-    var url = "luna://com.webos.service.bluetooth2/gatt/readCharacteristicValue";
-    var params = JSON.stringify({
-      "address":characteristic.service.device.address,
-      "service":characteristic.serviceUuid,
-      "characteristic":characteristic.characteristicUuid,
-    });
-    characteristic.bridge.call(url, params);
+  var url = "luna://com.webos.service.bluetooth2/gatt/readCharacteristicValue";
+  var params = JSON.stringify({
+    "address":characteristic.service.device.address,
+    "service":characteristic.serviceUuid,
+    "characteristic":characteristic.characteristicUuid,
   });
-
+  characteristic.bridge.call(url, params);
+console.log("    params: " + params);
+  var promise = new Promise(function(resolve, reject) {
+    promiseResolve = resolve;
+    promiseReject = reject;
+  });
   return promise;
 }
 
@@ -359,9 +363,9 @@ BluetoothGATTCharacteristic.prototype.startNotifications = function() {
 
   var url = "luna://com.webos.service.bluetooth2/gatt/monitorCharacteristic";
   var params = JSON.stringify({
-    "clientId":this.clientId,
-    "service":this.serviceUuid,
-    "characteristic":this.characteristicUuid,
+    "clientId":characteristic.clientId,
+    "service":characteristic.serviceUuid,
+    "characteristic":characteristic.characteristicUuid,
     "subscribe":true,
   });
   this.bridge.call(url, params);
