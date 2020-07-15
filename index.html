@@ -128,7 +128,7 @@
                         configOverwrite: { preferH264: true },
                     }
                     var api = new JitsiMeetExternalAPI(domain, options);
-                    api.addEventListener('participantLeft', function(id) {
+                    function backToWait() {
                         document.getElementById("app").innerHTML = ' \
                             <div>Waiting for a call...</div> \
                             ';
@@ -140,7 +140,9 @@
                         if (isWebOS() && relaunchedForCall && webOSSystem !== undefined)
                             webOSSystem.close('EXIT_TO_LASTAPP')
                         location.reload();
-                    });
+                    }
+                    api.addEventListener('participantLeft', backToWait);
+                    api.addEventListener('videoConferenceLeft', backToWait);
 
                     if (heartRateService !== undefined) {
                         socket.emit('heart_rate_available', {});
